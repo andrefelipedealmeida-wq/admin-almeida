@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userProfile().data.deleted != true;
+    }
+
+    function isMaster() {
+      return isStaff() && userProfile().data.role == 'master';
+    }
+
+    function owns(resource) {
+      return resource.data.userId == request.auth.uid;
+    }
+
+    function mayReadBusinessRecord(resource) {
+      return isMaster() || (isStaff() && owns(resource));
+    }
+
+    function mayWriteOwnedBusinessRecord(resource) {
+      return isMaster() || (isStaff() && owns(resource));
+    }
+
+    function isClientFor(clientId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/clients/$(clientId)).data.uid == request.auth.uid;
+    }
+
+    // User profiles are authorization records. Their document id must be the Auth UID.
+    match /users/{userId} {
+      allow get: if signedIn() && (userId == request.auth.uid || isMaster());
+      allow list: if isMaster();
+      allow create, update, delete: if isMaster();
+    }
+
+    match /clients/{clientId} {
+      allow get, list: if mayReadBusinessRecord(resource) || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isStaff() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if mayWriteOwnedBusinessRecord(resource);
+    }
+
+    match /cases/{caseId} {
+      allow get, list: if mayReadBusinessRecord(resource) || isClientFor(resource.data.clientId);
+      allow create: if isStaff() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if mayWriteOwnedBusinessRecord(resource);
+
+      match /messages/{messageId} {
+        allow read: if mayReadBusinessRecord(get(/databases/$(database)/documents/cases/$(caseId)))
+          || isClientFor(get(/databases/$(database)/documents/cases/$(caseId)).data.clientId);
+        allow create: if (isStaff() || isClientFor(get(/databases/$(database)/documents/cases/$(caseId)).data.clientId))
+          && request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if isMaster();
+      }
+
+      match /documents/{documentId} {
+        allow read: if mayReadBusinessRecord(get(/databases/$(database)/documents/cases/$(caseId)))
+          || isClientFor(get(/databases/$(database)/documents/cases/$(caseId)).data.clientId);
+        allow create: if (isStaff() || isClientFor(get(/databases/$(database)/documents/cases/$(caseId)).data.clientId))
+          && request.resource.data.uploadedByUid == request.auth.uid;
+        allow update, delete: if isMaster() || (signedIn() && resource.data.uploadedByUid == request.auth.uid);
+      }
+    }
+
+    match /events/{eventId} {
+      allow get, list: if mayReadBusinessRecord(resource);
+      allow create: if isStaff() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if mayWriteOwnedBusinessRecord(resource);
+    }
+
+    match /inventories/{inventoryId} {
+      allow get, list: if mayReadBusinessRecord(resource);
+      allow create: if isStaff() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if mayWriteOwnedBusinessRecord(resource);
+    }
+
+    match /transactions/{transactionId} {
+      allow get, list: if mayReadBusinessRecord(resource);
+      allow create: if isStaff() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if mayWriteOwnedBusinessRecord(resource);
+    }
+
+    match /contacts/{contactId} {
+      allow create: if request.resource.data.keys().hasOnly([
+        'name', 'email', 'phone', 'subject', 'message', 'status', 'date', 'createdAt'
+      ]) && request.resource.data.status == 'Pendente';
+      allow read, update, delete: if isMaster();
+    }
+
+    // Public content remains readable; editorial changes require a master account.
+    match /articles/{articleId} {
+      allow read: if true;
+      allow write: if isMaster();
+    }
+
+    match /testimonials/{testimonialId} {
+      allow read: if true;
+      allow create: if request.resource.data.approved == false;
+      allow update, delete: if isMaster();
+    }
+
+    match /system/{documentId} {
+      allow read: if true;
+      allow write: if isMaster();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

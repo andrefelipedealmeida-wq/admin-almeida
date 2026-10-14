@@ -1,0 +1,8 @@
+{
+  "name": "Almeida Advocacia",
+  "description": "Sistema integrado de ERP/CRM e Portal Institucional para o Escritório Almeida Advocacia",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

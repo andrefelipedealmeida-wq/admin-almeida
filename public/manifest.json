@@ -1,0 +1,29 @@
+{
+  "name": "Almeida Advocacia",
+  "short_name": "Almeida",
+  "description": "Sistema integrado de ERP/CRM e Portal Institucional para o Escritório Almeida Advocacia",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#199300",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/imagens/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/imagens/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

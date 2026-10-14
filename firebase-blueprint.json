@@ -1,0 +1,195 @@
+{
+  "entities": {
+    "Article": {
+      "title": "Article",
+      "description": "An educational legal article published by the firm.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "author": { "type": "string" },
+        "date": { "type": "string" },
+        "readTime": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["title", "excerpt", "content", "category", "author", "date", "createdAt"]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Feedback shared by a client, moderated before appearing publicly.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "text": { "type": "string" },
+        "rating": { "type": "integer" },
+        "approved": { "type": "boolean" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "role", "text", "rating", "approved"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "A law firm client or constituent.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cpf": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "Case": {
+      "title": "Case",
+      "description": "An active legal lawsuit or administrative procedure.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientId": { "type": "string" },
+        "caseNumber": { "type": "string" },
+        "status": { "type": "string" },
+        "area": { "type": "string" },
+        "court": { "type": "string" },
+        "timeline": { "type": "array" },
+        "notes": { "type": "string" },
+        "tasks": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "clientName", "clientId", "status"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "An appointment, hearing, or task deadline.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "type", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A payment received or operational expense recorded.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" },
+        "caseId": { "type": "string" },
+        "caseTitle": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "type", "amount", "description", "date"]
+    },
+    "InventoryCase": {
+      "title": "InventoryCase",
+      "description": "An estate partition math and detail model.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientId": { "type": "string" },
+        "heirs": { "type": "array" },
+        "assets": { "type": "array" },
+        "debts": { "type": "array" },
+        "itcmdRate": { "type": "number" },
+        "attorneyFeeRate": { "type": "number" },
+        "courtFeeRate": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "clientName", "clientId"]
+    },
+    "ContactLead": {
+      "title": "ContactLead",
+      "description": "A message submitted through the general contact form.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "date": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "email", "phone", "subject", "message"]
+    },
+    "User": {
+      "title": "User",
+      "description": "An ERP platform user account with roles and credentials.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name", "email", "password", "role"]
+    }
+  },
+  "firestore": {
+    "articles": {
+      "schema": { "$ref": "#/entities/Article" },
+      "description": "Collection of published legal and educational blog posts."
+    },
+    "testimonials": {
+      "schema": { "$ref": "#/entities/Testimonial" },
+      "description": "Public feedback and ratings left by users, moderated."
+    },
+    "clients": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "ERP CRM collection of active court constituents."
+    },
+    "cases": {
+      "schema": { "$ref": "#/entities/Case" },
+      "description": "Lawsuits timeline, tasks, and notes tracked by lawyers."
+    },
+    "events": {
+      "schema": { "$ref": "#/entities/Event" },
+      "description": "Deadlines, public hearings, and meetings scheduled on calendar."
+    },
+    "transactions": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Full financial accounting book showing revenues and costs."
+    },
+    "inventories": {
+      "schema": { "$ref": "#/entities/InventoryCase" },
+      "description": "Consensual partition calculations of heirs, assets and debts."
+    },
+    "contacts": {
+      "schema": { "$ref": "#/entities/ContactLead" },
+      "description": "Raw marketing leads submitted from customer touches."
+    },
+    "users": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "ERP user profiles and authorization roles."
+    }
+  }
+}
