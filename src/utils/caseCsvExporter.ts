@@ -72,7 +72,10 @@ export const generateCasesCsv = (
     'Endereço do Cliente',
     'Área de Atuação',
     'Situação / Status',
-    'Vara / Comarca / Tribunal',
+    'Tribunal',
+    'Órgão Julgador / Vara',
+    'Juízo / Tribunal Consolidado',
+    'Link dos Autos (URL)',
     'Valor da Causa (R$)',
     'Data de Cadastro',
     'Total de Metas / Tarefas',
@@ -113,7 +116,10 @@ export const generateCasesCsv = (
       client?.address || 'Não informado',
       cs.area || 'Outros',
       cs.status || 'Em andamento',
+      cs.tribunal || 'Não informado',
+      cs.orgaoJulgador || cs.court || 'Não especificado',
       cs.court || 'Não especificado',
+      cs.processLink || 'Não informado',
       formatCsvCurrency(cs.value),
       formatCsvDate(cs.createdAt),
       String(totalTasks),
@@ -154,7 +160,10 @@ export const generateSingleCaseDetailedCsv = (
   lines.push([escapeCsvCell('Telefone'), escapeCsvCell(client?.phone || 'Não informado')].join(delimiter));
   lines.push([escapeCsvCell('Área'), escapeCsvCell(caseItem.area)].join(delimiter));
   lines.push([escapeCsvCell('Situação / Status'), escapeCsvCell(caseItem.status)].join(delimiter));
-  lines.push([escapeCsvCell('Juízo / Vara / Tribunal'), escapeCsvCell(caseItem.court || 'Não especificado')].join(delimiter));
+  lines.push([escapeCsvCell('Tribunal'), escapeCsvCell(caseItem.tribunal || 'Não informado')].join(delimiter));
+  lines.push([escapeCsvCell('Órgão Julgador / Vara'), escapeCsvCell(caseItem.orgaoJulgador || caseItem.court || 'Não especificado')].join(delimiter));
+  lines.push([escapeCsvCell('Juízo Consolidado'), escapeCsvCell(caseItem.court || 'Não especificado')].join(delimiter));
+  lines.push([escapeCsvCell('Link dos Autos Eletrônicos'), escapeCsvCell(caseItem.processLink || 'Não informado')].join(delimiter));
   lines.push([escapeCsvCell('Valor da Causa (R$)'), escapeCsvCell(formatCsvCurrency(caseItem.value))].join(delimiter));
   lines.push([escapeCsvCell('Data de Cadastro'), escapeCsvCell(formatCsvDate(caseItem.createdAt))].join(delimiter));
   lines.push([escapeCsvCell('Anotações / Pareceres'), escapeCsvCell(caseItem.notes || 'Nenhuma anotação')].join(delimiter));

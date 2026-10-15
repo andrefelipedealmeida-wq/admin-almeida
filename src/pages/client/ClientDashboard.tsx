@@ -35,7 +35,8 @@ import {
   X,
   Search,
   Image as ImageIcon,
-  CheckCircle
+  CheckCircle,
+  ExternalLink
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -1412,9 +1413,15 @@ export default function ClientDashboard() {
                   
                   <div className="space-y-3 text-xs">
                     <div>
-                      <span className="block text-neutral-500 mb-0.5">Vara / Comarca</span>
-                      <span className="text-neutral-200 font-medium">{selectedCase.court || 'Não informado'}</span>
+                      <span className="block text-neutral-500 mb-0.5">Órgão Julgador / Vara</span>
+                      <span className="text-neutral-200 font-medium">{selectedCase.orgaoJulgador || selectedCase.court || 'Não informado'}</span>
                     </div>
+                    {selectedCase.tribunal && (
+                      <div>
+                        <span className="block text-neutral-500 mb-0.5">Tribunal</span>
+                        <span className="text-neutral-200 font-medium">{selectedCase.tribunal}</span>
+                      </div>
+                    )}
                     <div>
                       <span className="block text-neutral-500 mb-0.5">Área do Direito</span>
                       <span className="text-neutral-200 font-medium">{selectedCase.area || 'Não informada'}</span>
@@ -1423,6 +1430,20 @@ export default function ClientDashboard() {
                       <span className="block text-neutral-500 mb-0.5">Fase Atual / Situação</span>
                       <span className="text-neutral-200 font-medium">{selectedCase.status || 'Inicial'}</span>
                     </div>
+                    {selectedCase.processLink && (
+                      <div>
+                        <span className="block text-neutral-500 mb-1">Autos do Processo</span>
+                        <a
+                          href={selectedCase.processLink.startsWith('http') ? selectedCase.processLink : `https://${selectedCase.processLink}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-all"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Consultar Autos Eletrônicos</span>
+                        </a>
+                      </div>
+                    )}
                     <div>
                       <span className="block text-neutral-500 mb-0.5">Descrição / Notas</span>
                       <p className="text-neutral-300 leading-relaxed">{selectedCase.notes || 'Nenhuma descrição fornecida.'}</p>

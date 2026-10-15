@@ -115,8 +115,9 @@ export const generateSingleCaseReportPdf = (
   currentY += 6;
 
   // --- Process Identification Card ---
+  const hasLink = Boolean(caseItem.processLink);
   const cardY = currentY;
-  const cardHeight = 44;
+  const cardHeight = (client ? 48 : 42) + (hasLink ? 6.5 : 0);
   doc.setFillColor(248, 250, 252); // slate-50
   doc.setDrawColor(226, 232, 240);
   doc.roundedRect(margin, cardY, contentWidth, cardHeight, 2, 2, 'FD');
@@ -166,21 +167,24 @@ export const generateSingleCaseReportPdf = (
   doc.setTextColor(100, 116, 139);
   doc.text('Área de Atuação:', col2X, innerY);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
   doc.text(caseItem.area || 'Geral', col2X + 25, innerY);
 
   innerY += 6;
 
-  // Row 3: Tribunal & Cliente
+  // Row 3: Tribunal & Órgão Julgador
+  const courtText = caseItem.tribunal && caseItem.orgaoJulgador 
+    ? `${caseItem.tribunal} • ${caseItem.orgaoJulgador}`
+    : (caseItem.orgaoJulgador || caseItem.tribunal || caseItem.court || 'Não especificado');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text('Foro / Tribunal / Vara:', innerLeft, innerY);
+  doc.text('Tribunal / Vara:', innerLeft, innerY);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
-  doc.text(caseItem.court || 'Não especificado', innerLeft + 35, innerY);
+  doc.text(courtText, innerLeft + 35, innerY);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -212,6 +216,20 @@ export const generateSingleCaseReportPdf = (
     doc.setFontSize(8);
     doc.setTextColor(15, 23, 42);
     doc.text(formatCurrency(caseItem.value), col2X + 25, innerY);
+  }
+
+  // Row 5: Process Link if present
+  if (hasLink && caseItem.processLink) {
+    innerY += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Autos Eletrônicos:', innerLeft, innerY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(5, 150, 105);
+    const linkStr = caseItem.processLink.length > 70 ? caseItem.processLink.substring(0, 67) + '...' : caseItem.processLink;
+    doc.text(linkStr, innerLeft + 35, innerY);
   }
 
   // Extra line for Client Contacts if available

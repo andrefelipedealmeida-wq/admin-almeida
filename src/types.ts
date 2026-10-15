@@ -65,6 +65,9 @@ export interface Case {
   status: 'Em andamento' | 'Suspenso' | 'Concluído' | 'Renunciado';
   area: 'Inventários e Partilhas' | 'Direito Imobiliário' | 'Direito de Família' | 'Direito Civil e Contratos' | 'Registro de Marcas' | 'Outros' | string;
   court: string;
+  tribunal?: string;
+  orgaoJulgador?: string;
+  processLink?: string;
   timeline: CaseTimeline[];
   notes: string;
   tasks: CaseTask[];
@@ -110,6 +113,7 @@ export interface CalendarEvent {
   caseTitle?: string;
   postponeCount?: number;
   impreterivel?: boolean;
+  emAndamento?: boolean;
   createdAt: string;
   deleted?: boolean;
   deletedAt?: string;

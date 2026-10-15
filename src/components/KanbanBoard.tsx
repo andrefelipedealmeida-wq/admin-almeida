@@ -47,7 +47,8 @@ import {
   ChevronDown,
   RotateCcw,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Play
 } from 'lucide-react';
 import { sortSubEvents, countSubEvents } from '../pages/admin/AgendaPage';
 
@@ -143,6 +144,7 @@ interface LargeKanbanCardProps {
   onToggleSubEvent: (evt: CalendarEvent, subId: string) => void;
   onMoveToToday: (evt: CalendarEvent) => void;
   onToggleImpreterivel: (evt: CalendarEvent) => void;
+  onToggleEmAndamento?: (evt: CalendarEvent) => void;
   isOverlay?: boolean;
 }
 
@@ -155,6 +157,7 @@ export function LargeKanbanCard({
   onToggleSubEvent,
   onMoveToToday,
   onToggleImpreterivel,
+  onToggleEmAndamento,
   isOverlay = false
 }: LargeKanbanCardProps) {
   const {
@@ -254,6 +257,18 @@ export function LargeKanbanCard({
             <span className="inline-flex items-center space-x-1 bg-yellow-400/20 text-yellow-300 border border-yellow-400/50 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wider shadow-sm">
               <Flag className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               <span>IMPRETERÍVEL</span>
+            </span>
+          )}
+
+          {/* Em Andamento Flag Badge */}
+          {(evt.emAndamento || evt.executionStatus === 'iniciado') && (
+            <span className="inline-flex items-center space-x-1 bg-sky-400/20 text-sky-300 border border-sky-400/50 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wider shadow-sm">
+              <span className="relative flex h-2 w-2 mr-0.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+              </span>
+              <Play className="w-2.5 h-2.5 fill-sky-400 text-sky-400" />
+              <span>EM ANDAMENTO</span>
             </span>
           )}
         </div>
@@ -413,6 +428,22 @@ export function LargeKanbanCard({
           >
             <Flag className="w-3.5 h-3.5" />
           </button>
+
+          {/* Toggle Em Andamento */}
+          {onToggleEmAndamento && (
+            <button
+              type="button"
+              onClick={() => onToggleEmAndamento(evt)}
+              className={`p-1 rounded-md transition-colors cursor-pointer ${
+                (evt.emAndamento || evt.executionStatus === 'iniciado')
+                  ? 'text-sky-400 bg-sky-950/60 border border-sky-500/40'
+                  : 'text-neutral-500 hover:text-sky-400 hover:bg-neutral-800'
+              }`}
+              title={(evt.emAndamento || evt.executionStatus === 'iniciado') ? "Remover flag Em Andamento" : "Marcar como Em Andamento"}
+            >
+              <Play className={`w-3.5 h-3.5 ${(evt.emAndamento || evt.executionStatus === 'iniciado') ? 'fill-sky-400' : ''}`} />
+            </button>
+          )}
         </div>
 
         <div className="flex items-center space-x-1">
@@ -472,6 +503,7 @@ interface DroppableKanbanColumnProps {
   onToggleSubEvent: (evt: CalendarEvent, subId: string) => void;
   onMoveToToday: (evt: CalendarEvent) => void;
   onToggleImpreterivel: (evt: CalendarEvent) => void;
+  onToggleEmAndamento?: (evt: CalendarEvent) => void;
   onAddEventInColumn?: (colId: string) => void;
 }
 
@@ -491,6 +523,7 @@ function DroppableKanbanColumn({
   onToggleSubEvent,
   onMoveToToday,
   onToggleImpreterivel,
+  onToggleEmAndamento,
   onAddEventInColumn
 }: DroppableKanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -543,6 +576,7 @@ function DroppableKanbanColumn({
                 onToggleSubEvent={onToggleSubEvent}
                 onMoveToToday={onMoveToToday}
                 onToggleImpreterivel={onToggleImpreterivel}
+                onToggleEmAndamento={onToggleEmAndamento}
               />
             ))
           ) : (
@@ -636,6 +670,7 @@ export const isEventCompleted = (e: CalendarEvent): boolean => {
 export const matchEventType = (e: CalendarEvent, filter: string | null): boolean => {
   if (!filter) return true;
   if (filter === 'impreterivel') return !!e.impreterivel;
+  if (filter === 'em_andamento') return !!(e.emAndamento || e.executionStatus === 'iniciado');
   const t = (e.type || '').toLowerCase().trim();
   if (filter === 'outro') {
     return (
@@ -662,6 +697,7 @@ export interface KanbanBoardProps {
   onToggleSubEvent: (evt: CalendarEvent, subId: string) => void;
   onMoveToToday: (evt: CalendarEvent) => void;
   onToggleImpreterivel: (evt: CalendarEvent) => void;
+  onToggleEmAndamento?: (evt: CalendarEvent) => void;
   onAddNewEventWithDefaults?: (defaults: Partial<CalendarEvent>) => void;
   activeTypeFilter: string | null;
   setActiveTypeFilter: (filter: string | null) => void;
@@ -684,6 +720,7 @@ export default function KanbanBoard({
   onToggleSubEvent,
   onMoveToToday,
   onToggleImpreterivel,
+  onToggleEmAndamento,
   onAddNewEventWithDefaults,
   activeTypeFilter,
   setActiveTypeFilter,
@@ -1128,6 +1165,7 @@ export default function KanbanBoard({
                   onToggleSubEvent={onToggleSubEvent}
                   onMoveToToday={onMoveToToday}
                   onToggleImpreterivel={onToggleImpreterivel}
+                  onToggleEmAndamento={onToggleEmAndamento}
                   onAddEventInColumn={handleAddInColumn}
                 />
               );
@@ -1151,6 +1189,7 @@ export default function KanbanBoard({
                 onToggleSubEvent={onToggleSubEvent}
                 onMoveToToday={onMoveToToday}
                 onToggleImpreterivel={onToggleImpreterivel}
+                onToggleEmAndamento={onToggleEmAndamento}
                 onAddEventInColumn={handleAddInColumn}
               />
 
@@ -1170,6 +1209,7 @@ export default function KanbanBoard({
                 onToggleSubEvent={onToggleSubEvent}
                 onMoveToToday={onMoveToToday}
                 onToggleImpreterivel={onToggleImpreterivel}
+                onToggleEmAndamento={onToggleEmAndamento}
                 onAddEventInColumn={handleAddInColumn}
               />
             </>
@@ -1188,6 +1228,7 @@ export default function KanbanBoard({
               onToggleSubEvent={() => {}}
               onMoveToToday={() => {}}
               onToggleImpreterivel={() => {}}
+              onToggleEmAndamento={() => {}}
               isOverlay={true}
             />
           ) : null}

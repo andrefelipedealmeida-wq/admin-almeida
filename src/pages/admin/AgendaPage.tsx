@@ -38,7 +38,9 @@ import {
   History,
   Send,
   Notebook,
-  Search
+  Search,
+  Play,
+  PlayCircle
 } from 'lucide-react';
 import { CalendarEvent, Client, Case, SubEvent, EventLog } from '../../types';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
@@ -934,6 +936,7 @@ interface SortableEventCardProps {
   isDragEnabled: boolean;
   onMoveToToday: (evt: CalendarEvent) => void;
   onToggleImpreterivel?: (evt: CalendarEvent) => void;
+  onToggleEmAndamento?: (evt: CalendarEvent) => void;
   showDateBadge?: boolean;
 }
 
@@ -949,6 +952,7 @@ function SortableEventCard({
   isDragEnabled,
   onMoveToToday,
   onToggleImpreterivel,
+  onToggleEmAndamento,
   showDateBadge
 }: SortableEventCardProps) {
   const {
@@ -969,9 +973,11 @@ function SortableEventCard({
 
   const isLembrete = evt.type === 'lembrete';
   const isCompleted = isEventCompleted(evt);
+  const isEmAndamento = !!(evt.emAndamento || evt.executionStatus === 'iniciado');
 
   let typeColor = 'border-l-blue-500';
   if (evt.impreterivel) typeColor = 'border-l-yellow-400';
+  else if (isEmAndamento) typeColor = 'border-l-sky-400';
   else if (evt.type === 'audiência') typeColor = 'border-l-orange-500';
   else if (evt.type === 'prazo') typeColor = 'border-l-red-500';
   else if (evt.type === 'lembrete') typeColor = 'border-l-yellow-500';
@@ -983,9 +989,13 @@ function SortableEventCard({
     ? isSelected
       ? 'border-yellow-400 bg-yellow-950/40 ring-1 ring-yellow-400/60 shadow-md shadow-yellow-500/10'
       : 'border-yellow-500/60 bg-yellow-950/25 hover:border-yellow-400 hover:bg-yellow-900/30 shadow-sm shadow-yellow-500/10'
-    : isSelected
-      ? (isLembrete ? 'border-yellow-500/80 bg-yellow-950/20 ring-1 ring-yellow-500/40' : 'border-emerald-600 bg-neutral-900')
-      : (isLembrete ? 'border-yellow-900/30 bg-neutral-950 hover:border-yellow-600/50 hover:bg-yellow-950/10' : 'border-neutral-800 bg-neutral-950 hover:border-emerald-500 hover:bg-neutral-900/40');
+    : isEmAndamento
+      ? isSelected
+        ? 'border-sky-400 bg-sky-950/40 ring-1 ring-sky-400/60 shadow-md shadow-sky-500/10'
+        : 'border-sky-500/60 bg-sky-950/20 hover:border-sky-400 hover:bg-sky-900/30 shadow-sm shadow-sky-500/10'
+      : isSelected
+        ? (isLembrete ? 'border-yellow-500/80 bg-yellow-950/20 ring-1 ring-yellow-500/40' : 'border-emerald-600 bg-neutral-900')
+        : (isLembrete ? 'border-yellow-900/30 bg-neutral-950 hover:border-yellow-600/50 hover:bg-yellow-950/10' : 'border-neutral-800 bg-neutral-950 hover:border-emerald-500 hover:bg-neutral-900/40');
 
   // RENDERIZAÇÃO COMPACTA / MINIMALISTA PARA LEMBRETES: Apenas Título e Subtarefas
   if (isLembrete) {
@@ -1017,6 +1027,12 @@ function SortableEventCard({
           </div>
 
           <div className="flex items-center space-x-1.5 shrink-0">
+            {isEmAndamento && (
+              <span className="text-[10px] font-mono font-medium text-sky-400 bg-sky-950/40 border border-sky-500/30 px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                Andamento
+              </span>
+            )}
             {subCount.total > 0 && (
               <span className="text-[10px] font-mono font-medium text-yellow-500/90 bg-yellow-950/40 border border-yellow-500/20 px-1.5 py-0.2 rounded" title={`${subCount.completed} de ${subCount.total} subtarefas concluídas`}>
                 {subCount.completed}/{subCount.total}
@@ -1039,6 +1055,15 @@ function SortableEventCard({
             
             {/* Quick Actions no Hover para Lembrete */}
             <div className="flex items-center space-x-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {onToggleEmAndamento && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleEmAndamento(evt); }}
+                  title={isEmAndamento ? "Remover flag Em Andamento" : "Marcar como Em Andamento"}
+                  className={`p-1 rounded hover:bg-neutral-800 cursor-pointer transition-colors ${isEmAndamento ? 'text-sky-400' : 'text-neutral-400 hover:text-sky-400'}`}
+                >
+                  <Play className={`w-3.5 h-3.5 ${isEmAndamento ? 'fill-sky-400' : ''}`} />
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleComplete(evt); }}
                 title={isCompleted ? "Reabrir lembrete" : "Marcar como concluído"}
@@ -1108,6 +1133,16 @@ function SortableEventCard({
             <span className="inline-flex items-center space-x-1 bg-yellow-400/20 text-yellow-300 border border-yellow-400/50 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold tracking-wider uppercase shadow-sm">
               <Flag className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               <span>IMPRETERÍVEL</span>
+            </span>
+          )}
+          {isEmAndamento && (
+            <span className="inline-flex items-center space-x-1 bg-sky-400/20 text-sky-300 border border-sky-400/50 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold tracking-wider uppercase shadow-sm">
+              <span className="relative flex h-2 w-2 mr-0.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+              </span>
+              <Play className="w-2.5 h-2.5 fill-sky-400 text-sky-400" />
+              <span>EM ANDAMENTO</span>
             </span>
           )}
           {evt.priority && (
@@ -1241,6 +1276,20 @@ function SortableEventCard({
           >
             <Flag className={`w-3 h-3 ${evt.impreterivel ? 'fill-yellow-400 text-yellow-400' : 'text-neutral-500'}`} />
             <span>Impreterível</span>
+          </button>
+
+          {/* Em Andamento Flag Toggle */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleEmAndamento?.(evt); }}
+            title={isEmAndamento ? "Remover flag Em Andamento" : "Marcar como Em Andamento (Azul Celeste)"}
+            className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded border cursor-pointer transition-all ${
+              isEmAndamento
+                ? 'bg-sky-950/60 text-sky-300 border-sky-500/50 hover:bg-sky-900/40 shadow-xs'
+                : 'bg-neutral-900 text-neutral-450 hover:text-sky-400 hover:border-sky-500/30 border-neutral-850'
+            }`}
+          >
+            <Play className={`w-3 h-3 ${isEmAndamento ? 'fill-sky-400 text-sky-400' : 'text-neutral-500'}`} />
+            <span>Em Andamento</span>
           </button>
 
           {/* Editar Button */}
@@ -1626,6 +1675,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
     clientId: string;
     priority: 'Fatal' | 'Urgente' | 'Alta' | 'Média' | 'Baixa';
     impreterivel?: boolean;
+    emAndamento?: boolean;
     subEvents: CalendarEvent['subEvents'];
     logs: CalendarEvent['logs'];
     caseId?: string;
@@ -1642,6 +1692,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
     clientId: '',
     priority: 'Média',
     impreterivel: false,
+    emAndamento: false,
     subEvents: [],
     logs: [],
     caseId: '',
@@ -1912,6 +1963,26 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
     }
   };
 
+  const handleToggleEmAndamento = async (evt: CalendarEvent) => {
+    const isCurrent = !!(evt.emAndamento || evt.executionStatus === 'iniciado');
+    const newVal = !isCurrent;
+    const updates: Partial<CalendarEvent> = {
+      emAndamento: newVal,
+      executionStatus: (newVal ? 'iniciado' : (evt.status === 'Concluído' ? 'concluido' : 'a_fazer')) as any
+    };
+    try {
+      await updateDoc(doc(db, 'events', evt.id), updates);
+      if (selectedEventDetails && selectedEventDetails.id === evt.id) {
+        setSelectedEventDetails({ ...selectedEventDetails, ...updates });
+      }
+      setSelectedDayEvents(prev => prev.map(e => e.id === evt.id ? { ...e, ...updates } : e));
+      toast.success(newVal ? 'Compromisso marcado como Em Andamento!' : 'Flag Em Andamento removida.');
+    } catch (err) {
+      console.error('Erro ao alternar flag em andamento:', err);
+      toast.error('Erro ao atualizar flag em andamento.');
+    }
+  };
+
   const handleDeleteEvent = async (evtId: string) => {
     try {
       await updateDoc(doc(db, 'events', evtId), {
@@ -2136,6 +2207,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
       clientId: evt.clientId || '',
       priority: evt.priority || 'Média',
       impreterivel: !!evt.impreterivel,
+      emAndamento: !!(evt.emAndamento || evt.executionStatus === 'iniciado'),
       subEvents: evt.subEvents || [],
       logs: evt.logs || [],
       caseId: evt.caseId || '',
@@ -2192,6 +2264,10 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
       docPayload.clientId = newEvent.clientId || '';
       docPayload.priority = newEvent.priority || 'Média';
       docPayload.impreterivel = !!newEvent.impreterivel;
+      docPayload.emAndamento = !!newEvent.emAndamento;
+      if (newEvent.emAndamento && docPayload.status !== 'Concluído') {
+        docPayload.executionStatus = 'iniciado';
+      }
       docPayload.subEvents = newEvent.subEvents || [];
       docPayload.logs = newEvent.logs || [];
       docPayload.caseId = newEvent.caseId || '';
@@ -2230,6 +2306,8 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
         clientPhone: '',
         clientId: '',
         priority: 'Média',
+        impreterivel: false,
+        emAndamento: false,
         subEvents: [],
         logs: [],
         caseId: '',
@@ -2378,6 +2456,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                 clientId: '',
                 priority: 'Média',
                 impreterivel: false,
+                emAndamento: false,
                 subEvents: [],
                 logs: [],
                 caseId: '',
@@ -2408,6 +2487,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
           onToggleSubEvent={handleToggleSubEventOnDatabase}
           onMoveToToday={handleMoveToToday}
           onToggleImpreterivel={handleToggleImpreterivel}
+          onToggleEmAndamento={handleToggleEmAndamento}
           onAddNewEventWithDefaults={(defaults) => {
             setNewEvent({
               title: '',
@@ -2421,6 +2501,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
               clientId: '',
               priority: 'Média',
               impreterivel: false,
+              emAndamento: false,
               subEvents: [],
               logs: [],
               caseId: '',
@@ -2464,6 +2545,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
             <div className="flex flex-wrap gap-2">
               {[
                 { id: 'impreterivel', label: 'Impreterível', color: 'text-yellow-300 bg-yellow-950/40 border-yellow-500/30', activeColor: 'ring-1 ring-yellow-400 bg-yellow-900/40 border-yellow-400 text-yellow-300', icon: Flag },
+                { id: 'em_andamento', label: 'Em Andamento', color: 'text-sky-300 bg-sky-950/40 border-sky-500/30', activeColor: 'ring-1 ring-sky-400 bg-sky-900/40 border-sky-400 text-sky-300', icon: Play },
                 { id: 'financeiro', label: 'Financeiro', color: 'text-emerald-400 bg-emerald-950/40 border-emerald-500/20', activeColor: 'ring-1 ring-emerald-500 bg-emerald-900/30 border-emerald-500', icon: DollarSign },
                 { id: 'audiência', label: 'Audiência', color: 'text-orange-400 bg-orange-950/40 border-orange-500/20', activeColor: 'ring-1 ring-orange-500 bg-orange-900/30 border-orange-500', icon: Gavel },
                 { id: 'reunião', label: 'Reunião', color: 'text-blue-400 bg-blue-950/40 border-blue-500/20', activeColor: 'ring-1 ring-blue-500 bg-blue-900/30 border-blue-500', icon: Users },
@@ -2567,6 +2649,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                       {dayEvents.map(e => {
                         let color = 'bg-blue-500';
                         if (e.impreterivel) color = 'bg-yellow-400 ring-1 ring-yellow-300/80';
+                        else if (e.emAndamento || e.executionStatus === 'iniciado') color = 'bg-sky-400 ring-1 ring-sky-300/80';
                         else if (e.type === 'audiência') color = 'bg-orange-500';
                         else if (e.type === 'prazo') color = 'bg-red-500';
                         else if (e.type === 'lembrete') color = 'bg-yellow-500';
@@ -2577,7 +2660,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                           <div 
                             key={e.id} 
                             className={`w-1.5 h-1.5 rounded-full ${color} ${opacity}`} 
-                            title={`${e.impreterivel ? '[IMPRETERÍVEL] ' : ''}${e.title} (${e.status})`} 
+                            title={`${e.impreterivel ? '[IMPRETERÍVEL] ' : ''}${(e.emAndamento || e.executionStatus === 'iniciado') ? '[EM ANDAMENTO] ' : ''}${e.title} (${e.status})`} 
                           />
                         )
                       })}
@@ -2773,6 +2856,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                         isDragEnabled={agendaScope === 'day'}
                         onMoveToToday={handleMoveToToday}
                         onToggleImpreterivel={handleToggleImpreterivel}
+                        onToggleEmAndamento={handleToggleEmAndamento}
                         showDateBadge={agendaScope !== 'day'}
                       />
                     ))}
@@ -3022,6 +3106,51 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                             className="sr-only peer"
                           />
                           <div className="w-11 h-6 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Flag Em Andamento Toggle */}
+                    <div className="md:col-span-12">
+                      <div 
+                        onClick={() => setNewEvent({ ...newEvent, emAndamento: !newEvent.emAndamento })}
+                        className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all select-none ${
+                          newEvent.emAndamento 
+                            ? 'bg-sky-950/30 border-sky-500/60 ring-1 ring-sky-500/40 shadow-sm shadow-sky-500/10' 
+                            : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                            newEvent.emAndamento ? 'bg-sky-400/20 text-sky-400' : 'bg-neutral-900 text-neutral-500'
+                          }`}>
+                            <Play className={`w-5 h-5 ${newEvent.emAndamento ? 'fill-sky-400' : ''}`} />
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-bold font-sans text-neutral-200">
+                                Marcar como Em Andamento
+                              </span>
+                              {newEvent.emAndamento && (
+                                <span className="text-[9px] font-mono font-bold bg-sky-400/20 text-sky-300 border border-sky-400/50 px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                                  Flag Ativa (Em Execução)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-neutral-400 mt-0.5">
+                              Sinaliza que este compromisso ou audiência está em execução ativa no momento (destaque azul celeste).
+                            </p>
+                          </div>
+                        </div>
+                        <div className="relative inline-flex items-center cursor-pointer pointer-events-none">
+                          <input
+                            type="checkbox"
+                            checked={!!newEvent.emAndamento}
+                            readOnly
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
                         </div>
                       </div>
                     </div>
@@ -3405,6 +3534,16 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                     <span>IMPRETERÍVEL</span>
                   </span>
                 )}
+                {(selectedEventDetails.emAndamento || selectedEventDetails.executionStatus === 'iniciado') && (
+                  <span className="inline-flex items-center space-x-1.5 bg-sky-400/20 text-sky-300 border border-sky-400/50 px-2.5 py-0.5 rounded-md text-xs font-mono font-bold tracking-wider uppercase shadow-sm">
+                    <span className="relative flex h-2 w-2 mr-0.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                    </span>
+                    <Play className="w-3.5 h-3.5 fill-sky-400 text-sky-400" />
+                    <span>EM ANDAMENTO</span>
+                  </span>
+                )}
                 <span className={`text-xs font-sans font-semibold border px-2.5 py-0.5 rounded-md ${
                   selectedEventDetails.priority === 'Fatal' ? 'bg-red-950/60 text-red-400 border-red-500/30 font-bold animate-pulse' :
                   selectedEventDetails.priority === 'Urgente' ? 'bg-orange-950/40 text-orange-400 border-orange-500/20 font-semibold' :
@@ -3549,6 +3688,17 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
 
             {/* Actions Footer */}
             <div className="flex flex-wrap gap-2 justify-end border-t border-neutral-800 pt-4">
+              <button
+                onClick={() => handleToggleEmAndamento(selectedEventDetails)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-colors flex items-center space-x-1.5 ${
+                  (selectedEventDetails.emAndamento || selectedEventDetails.executionStatus === 'iniciado')
+                    ? 'bg-sky-500/20 border-sky-500/40 text-sky-300 hover:bg-sky-500/30'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:text-sky-400 hover:border-sky-500/40'
+                }`}
+              >
+                <Play className={`w-3.5 h-3.5 ${(selectedEventDetails.emAndamento || selectedEventDetails.executionStatus === 'iniciado') ? 'fill-sky-400 text-sky-400' : ''}`} />
+                <span>{(selectedEventDetails.emAndamento || selectedEventDetails.executionStatus === 'iniciado') ? 'Em Andamento ✓' : 'Marcar Em Andamento'}</span>
+              </button>
               <button
                 onClick={() => handleToggleImpreterivel(selectedEventDetails)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer border transition-colors flex items-center space-x-1.5 ${

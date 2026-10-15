@@ -21,7 +21,12 @@ import {
   Loader2,
   Download,
   FileDown,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Link2,
+  ExternalLink,
+  Copy,
+  Landmark,
+  Building2
 } from 'lucide-react';
 import { Case, Client, CaseTimeline, CaseTask, CaseMessage } from '../../types';
 import { collection, setDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
@@ -243,6 +248,9 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
     clientId: '',
     caseNumber: '',
     area: 'Inventários e Partilhas' as string,
+    tribunal: '',
+    orgaoJulgador: '',
+    processLink: '',
     court: '',
     notes: ''
   });
@@ -260,10 +268,14 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
     const selectedClient = clients.find(c => c.id === clientId);
     const clientName = selectedClient ? selectedClient.name : 'Cliente Geral / Avulso';
     const finalCaseNumber = newCase.caseNumber.trim() || 'Pendente / Sem número';
+    const tribunal = newCase.tribunal.trim();
+    const orgaoJulgador = newCase.orgaoJulgador.trim();
+    const processLink = newCase.processLink.trim();
+    const combinedCourt = [tribunal, orgaoJulgador].filter(Boolean).join(' - ') || newCase.court.trim() || 'Não especificado';
 
     try {
       const generatedCaseId = 'case_' + Math.random().toString(36).substr(2, 9);
-      const addedData = {
+      const addedData: any = {
         id: generatedCaseId,
         title: finalTitle,
         clientId: clientId,
@@ -271,7 +283,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
         caseNumber: finalCaseNumber,
         status: 'Em andamento' as const,
         area: newCase.area,
-        court: newCase.court || 'Não especificado',
+        court: combinedCourt,
         notes: newCase.notes,
         userId: auth.currentUser?.uid || '',
         createdBy: auth.currentUser?.email || '',
@@ -282,6 +294,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
         createdAt: new Date().toISOString()
       };
 
+      if (tribunal) addedData.tribunal = tribunal;
+      if (orgaoJulgador) addedData.orgaoJulgador = orgaoJulgador;
+      if (processLink) addedData.processLink = processLink;
+
       await setDoc(doc(db, 'cases', generatedCaseId), addedData);
       toast.success('Novo processo cadastrado e integrado com sucesso!');
       setIsAdding(false);
@@ -290,6 +306,9 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
         clientId: '',
         caseNumber: '',
         area: 'Inventários e Partilhas',
+        tribunal: '',
+        orgaoJulgador: '',
+        processLink: '',
         court: '',
         notes: ''
       });
@@ -308,6 +327,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
     const selectedClient = clients.find(c => c.id === clientId);
     const clientName = selectedClient ? selectedClient.name : 'Cliente Geral / Avulso';
     const finalCaseNumber = editingCase.caseNumber.trim() || 'Pendente / Sem número';
+    const tribunal = editingCase.tribunal?.trim() || '';
+    const orgaoJulgador = editingCase.orgaoJulgador?.trim() || '';
+    const processLink = editingCase.processLink?.trim() || '';
+    const combinedCourt = [tribunal, orgaoJulgador].filter(Boolean).join(' - ') || editingCase.court?.trim() || 'Não especificado';
 
     try {
       const updatedData: Case = {
@@ -318,7 +341,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
         caseNumber: finalCaseNumber,
         area: editingCase.area,
         status: editingCase.status,
-        court: editingCase.court || 'Não especificado',
+        court: combinedCourt,
+        tribunal: tribunal || undefined,
+        orgaoJulgador: orgaoJulgador || undefined,
+        processLink: processLink || undefined,
         notes: editingCase.notes,
         createdAt: editingCase.createdAt,
         value: (editingCase.value !== undefined && editingCase.value !== null) ? Number(editingCase.value) : undefined
@@ -440,11 +466,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
   });
 
   return (
-    <div className="space-y-6 text-neutral-100 relative">
+    <div className="space-y-6 text-neutral-100 relative font-sans" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif" }}>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-neutral-900 border border-neutral-800 p-4 rounded-xl">
         <div>
-          <h2 className="text-sm font-semibold font-display text-neutral-200">Painel Geral de Processos e Casos</h2>
-          <p className="text-xs text-neutral-400 mt-0.5">Gestão de prazos, andamentos processuais e emissão de relatórios.</p>
+          <h2 className="text-sm font-semibold font-sans text-neutral-200">Painel Geral de Processos e Casos</h2>
+          <p className="text-xs text-neutral-400 mt-0.5">Gestão de prazos, tramitação em tribunais e emissão de relatórios.</p>
         </div>
         <div className="flex items-center space-x-2.5 flex-wrap gap-2">
           <button
@@ -480,13 +506,13 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
       {/* Filters Search Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-neutral-900 border border-neutral-800 p-4 rounded-xl">
         <div className="relative">
-          <Search className="w-4 h-4 text-neutral-550 absolute left-3 top-3 text-neutral-400" />
+          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Nº processo, título, cliente..."
-            className="w-full pl-9 pr-4 py-2 border border-neutral-800 bg-neutral-950 focus:outline-none focus:ring-1 focus:ring-emerald-520 text-xs rounded-lg"
+            placeholder="Nº processo, título, tribunal, cliente..."
+            className="w-full pl-9 pr-4 py-2 border border-neutral-800 bg-neutral-950 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs rounded-lg text-neutral-200"
           />
         </div>
 
@@ -494,7 +520,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
           <select
             value={statusFilter}
             onChange={(e: any) => setStatusFilter(e.target.value)}
-            className="w-full border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs rounded-lg focus:outline-none text-neutral-200"
+            className="w-full border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs rounded-lg focus:outline-none text-neutral-200 font-sans"
           >
             <option value="Todos">Todas as Situações</option>
             <option value="Em andamento">Em andamento</option>
@@ -508,7 +534,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
           <select
             value={areaFilter}
             onChange={(e) => setAreaFilter(e.target.value)}
-            className="w-full border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs rounded-lg focus:outline-none text-neutral-200"
+            className="w-full border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs rounded-lg focus:outline-none text-neutral-200 font-sans"
           >
             <option value="Todos">Todas as Áreas</option>
             <option value="Inventários e Partilhas">Inventários e Partilhas</option>
@@ -528,9 +554,9 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
               onChange={(e) => setShowCompleted(e.target.checked)}
               className="rounded bg-neutral-950 border-neutral-800 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 h-3.5 w-3.5 cursor-pointer"
             />
-            <span className="text-[11px]">Exibir concluídos/renunciados</span>
+            <span className="text-xs font-sans">Exibir concluídos/renunciados</span>
           </label>
-          <span className="text-neutral-500 font-mono text-[11px]">{filteredCases.length} localizados</span>
+          <span className="text-neutral-400 font-sans text-xs">{filteredCases.length} localizados</span>
         </div>
       </div>
 
@@ -540,18 +566,18 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
         {/* Cases List */}
         <div className="lg:col-span-12 space-y-4">
           <div className="bg-neutral-900 rounded-xl border border-neutral-800 overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[800px]">
-              <thead className="bg-neutral-950 border-b border-neutral-800 text-xs text-neutral-400 font-mono tracking-wider">
+            <table className="w-full text-left border-collapse min-w-[850px]">
+              <thead className="bg-neutral-950 border-b border-neutral-800 text-xs text-neutral-400 font-sans tracking-normal">
                 <tr>
-                  <th className="px-6 py-3.5">Título do Processo</th>
-                  <th className="px-6 py-3.5">Nº Unificado</th>
-                  <th className="px-6 py-3.5">Cliente</th>
-                  <th className="px-6 py-3.5">Área / Tribunal</th>
-                  <th className="px-6 py-3.5">Situação</th>
-                  <th className="px-6 py-3.5 text-right">Ação</th>
+                  <th className="px-6 py-3.5 font-semibold">Título do Processo & Tramitação</th>
+                  <th className="px-6 py-3.5 font-semibold">Nº Unificado (CNJ)</th>
+                  <th className="px-6 py-3.5 font-semibold">Cliente</th>
+                  <th className="px-6 py-3.5 font-semibold">Área</th>
+                  <th className="px-6 py-3.5 font-semibold">Situação</th>
+                  <th className="px-6 py-3.5 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800/60 text-xs">
+              <tbody className="divide-y divide-neutral-800/60 text-xs font-sans">
                 {filteredCases.length > 0 ? (
                   filteredCases.map((cs) => (
                     <tr 
@@ -560,35 +586,57 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       onClick={() => setSelectedCase(cs)}
                     >
                       <td className="px-6 py-4">
-                        <span className="font-semibold text-neutral-200 block">{cs.title}</span>
-                        <span className="text-[10px] text-neutral-500 font-mono mt-0.5 block">{cs.court}</span>
+                        <span className="font-semibold text-neutral-200 block text-sm">{cs.title}</span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
+                          {cs.tribunal && (
+                            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              {cs.tribunal}
+                            </span>
+                          )}
+                          <span className="text-neutral-400">
+                            {cs.orgaoJulgador || cs.court || 'Não especificado'}
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 font-mono text-neutral-300">
+                      <td className="px-6 py-4 font-medium text-neutral-300 text-xs font-sans">
                         {cs.caseNumber}
                       </td>
-                      <td className="px-6 py-4 font-medium text-emerald-450 text-emerald-450">
+                      <td className="px-6 py-4 font-medium text-emerald-400 text-xs">
                         {cs.clientName}
                       </td>
                       <td className="px-6 py-4 space-y-1">
-                        <span className="bg-neutral-950 border border-neutral-800 text-[10px] px-2 py-0.5 rounded text-neutral-400 font-bold uppercase tracking-wider font-mono">
+                        <span className="bg-neutral-950 border border-neutral-800 text-xs px-2.5 py-1 rounded-md text-neutral-300 font-medium">
                           {cs.area}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded font-mono ${
-                          cs.status === 'Em andamento' ? 'bg-emerald-500/10 text-emerald-450' : 
-                          cs.status === 'Suspenso' ? 'bg-orange-500/10 text-orange-400' : 'bg-neutral-800 text-neutral-400'
+                        <span className={`px-2.5 py-1 text-xs font-medium rounded-md ${
+                          cs.status === 'Em andamento' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                          cs.status === 'Suspenso' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-neutral-800 text-neutral-300 border border-neutral-700/50'
                         }`}>
                           {cs.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
+                        {cs.processLink && (
+                          <a
+                            href={cs.processLink.startsWith('http') ? cs.processLink : `https://${cs.processLink}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1 px-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
+                            title="Acessar autos eletrônicos em nova aba"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Autos</span>
+                          </a>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleExportSingleCaseCsv(cs);
                           }}
-                          className="p-1 px-2.5 bg-neutral-800 text-emerald-400 hover:bg-neutral-700 hover:text-emerald-300 rounded text-[11px] font-semibold transition-all inline-flex items-center space-x-1 cursor-pointer"
+                          className="p-1 px-2.5 bg-neutral-800 text-emerald-400 hover:bg-neutral-700 hover:text-emerald-300 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
                           title="Exportar Dados e Andamentos deste Processo em Planilha CSV"
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -599,7 +647,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                             e.stopPropagation();
                             handleExportSingleCasePdf(cs);
                           }}
-                          className="p-1 px-2.5 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded text-[11px] font-semibold transition-all inline-flex items-center space-x-1 cursor-pointer"
+                          className="p-1 px-2.5 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
                           title="Exportar Relatório deste Processo em PDF"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -610,7 +658,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                             e.stopPropagation();
                             setSelectedCase(cs);
                           }}
-                          className="p-1 px-2.5 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white rounded text-[11px] font-semibold transition-all inline-flex items-center space-x-1 cursor-pointer"
+                          className="p-1 px-2.5 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           <span>Diligenciar</span>
@@ -620,7 +668,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                             e.stopPropagation();
                             setEditingCase(cs);
                           }}
-                          className="p-1 px-2.5 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white rounded text-[11px] font-semibold transition-all inline-flex items-center space-x-1 cursor-pointer"
+                          className="p-1 px-2.5 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
                         >
                           <Edit className="w-3.5 h-3.5" />
                           <span>Editar</span>
@@ -630,7 +678,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                             e.stopPropagation();
                             handleDeleteCase(cs.id);
                           }}
-                          className="p-1 px-2.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 rounded text-[11px] font-semibold transition-colors cursor-pointer inline-flex items-center space-x-1"
+                          className="p-1 px-2.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 rounded-lg text-xs font-medium transition-colors cursor-pointer inline-flex items-center space-x-1"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Excluir</span>
@@ -640,7 +688,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-500">Nenhum processo ou caso localizado com os termos solicitados.</td>
+                    <td colSpan={6} className="text-center py-12 text-slate-500 font-sans">Nenhum processo ou caso localizado com os termos solicitados.</td>
                   </tr>
                 )}
               </tbody>
@@ -652,15 +700,15 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
       {/* Edit/Detailed Drawer Overlay */}
       {selectedCase && (
-        <div className="fixed inset-y-0 right-0 w-full sm:max-w-2xl bg-neutral-900 border-l border-neutral-800 shadow-2xl z-50 overflow-y-auto p-6 sm:p-8 space-y-6 flex flex-col justify-between">
+        <div className="fixed inset-y-0 right-0 w-full sm:max-w-2xl bg-neutral-900 border-l border-neutral-800 shadow-2xl z-50 overflow-y-auto p-6 sm:p-8 space-y-6 flex flex-col justify-between font-sans">
           
           <div className="space-y-6">
             {/* Header close */}
             <div className="flex justify-between items-start border-b border-neutral-800 pb-4">
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-emerald-500">{selectedCase.area}</span>
-                <h3 className="text-lg font-bold text-neutral-100 font-display leading-snug">{selectedCase.title}</h3>
-                <p className="text-xs text-neutral-400 font-mono">{selectedCase.caseNumber}</p>
+                <span className="text-xs font-semibold text-emerald-400 font-sans">{selectedCase.area}</span>
+                <h3 className="text-lg font-bold text-neutral-100 font-sans leading-snug">{selectedCase.title}</h3>
+                <p className="text-xs text-neutral-400 font-sans font-medium">{selectedCase.caseNumber}</p>
               </div>
               <div className="flex items-center space-x-2">
                 <button
@@ -688,18 +736,101 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
               </div>
             </div>
 
+            {/* Tramitação Processual & Autos Card */}
+            <div className="bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 p-4 rounded-xl border border-neutral-800 shadow-sm space-y-3 font-sans">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-emerald-400 font-semibold text-xs tracking-wide">
+                  <Landmark className="w-4 h-4 text-emerald-400" />
+                  <span>Tramitação & Autos Eletrônicos</span>
+                </div>
+                {selectedCase.tribunal && (
+                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    {selectedCase.tribunal}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="text-neutral-400 block text-[11px] mb-0.5">Órgão Julgador / Vara:</span>
+                  <span className="text-neutral-200 font-medium">{selectedCase.orgaoJulgador || selectedCase.court || 'Não informado'}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-400 block text-[11px] mb-0.5">Tribunal / Comarca:</span>
+                  <span className="text-neutral-200 font-medium">{selectedCase.tribunal || 'Não informado'}</span>
+                </div>
+              </div>
+
+              {/* Link dos autos */}
+              <div className="pt-2.5 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center space-x-2 min-w-0 flex-1">
+                  <Link2 className="w-4 h-4 text-neutral-400 shrink-0" />
+                  {selectedCase.processLink ? (
+                    <a 
+                      href={selectedCase.processLink.startsWith('http') ? selectedCase.processLink : `https://${selectedCase.processLink}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline truncate font-medium"
+                      title={selectedCase.processLink}
+                    >
+                      {selectedCase.processLink}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-neutral-500 italic">Nenhum link de autos cadastrado para este processo</span>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-2 shrink-0">
+                  {selectedCase.processLink && (
+                    <>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedCase.processLink || '');
+                          toast.success('Link dos autos copiado com sucesso!');
+                        }}
+                        className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg text-xs font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                        title="Copiar link dos autos"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar</span>
+                      </button>
+                      <a
+                        href={selectedCase.processLink.startsWith('http') ? selectedCase.processLink : `https://${selectedCase.processLink}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-sm transition-all"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Acessar Autos</span>
+                      </a>
+                    </>
+                  )}
+                  <button
+                    onClick={() => {
+                      setEditingCase(selectedCase);
+                    }}
+                    className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-lg text-xs font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                    title="Editar informações da tramitação ou link"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>{selectedCase.processLink ? 'Editar' : 'Adicionar Link'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Quick Status Control */}
-            <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800 flex flex-wrap justify-between items-center gap-4 text-xs font-semibold">
-              <span className="text-neutral-450 uppercase font-mono text-[10px] tracking-wider font-bold">Mudar Situação Processual:</span>
+            <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800 flex flex-wrap justify-between items-center gap-4 text-xs font-sans font-medium">
+              <span className="text-neutral-400 font-semibold text-xs">Mudar Situação Processual:</span>
               <div className="flex space-x-2">
                 {(['Em andamento', 'Suspenso', 'Concluído'] as const).map(st => (
                   <button
                     key={st}
                     onClick={() => handleStatusUpdate(selectedCase, st)}
-                    className={`px-3 py-1.5 rounded text-[11px] font-bold uppercase font-mono ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium font-sans cursor-pointer transition-colors ${
                       selectedCase.status === st 
                         ? 'bg-emerald-600 text-white' 
-                        : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-850'
+                        : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-850 hover:text-neutral-200'
                     }`}
                   >
                     {st}
@@ -713,7 +844,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
               
               {/* Checklist Tasks */}
               <div className="space-y-4">
-                <h4 className="text-xs uppercase font-mono font-bold tracking-widest text-neutral-400 flex items-center space-x-1.5 border-b border-neutral-850 pb-2">
+                <h4 className="text-xs font-semibold text-neutral-300 flex items-center space-x-1.5 border-b border-neutral-800 pb-2 font-sans">
                   <CheckSquare className="w-4 h-4 text-emerald-500" />
                   <span>Incumbências do Caso</span>
                 </h4>
@@ -724,7 +855,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       <div 
                         key={tsk.id}
                         onClick={() => handleToggleTask(selectedCase, tsk.id)}
-                        className="flex items-center space-x-2.5 p-2 bg-neutral-950 hover:bg-neutral-850/50 rounded-lg cursor-pointer border border-neutral-850 transition-colors text-xs text-neutral-300"
+                        className="flex items-center space-x-2.5 p-2 bg-neutral-950 hover:bg-neutral-850/50 rounded-lg cursor-pointer border border-neutral-800 transition-colors text-xs text-neutral-300 font-sans"
                       >
                         {tsk.completed ? (
                           <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
@@ -735,7 +866,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       </div>
                     ))
                   ) : (
-                    <div className="text-[11px] text-neutral-500 italic py-2">Sem tarefas de diligência cadastradas.</div>
+                    <div className="text-xs text-neutral-500 italic py-2 font-sans">Sem tarefas de diligência cadastradas.</div>
                   )}
                 </div>
 
@@ -745,11 +876,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                     value={newTaskText}
                     onChange={(e) => setNewTaskText(e.target.value)}
                     placeholder="Adicionar tarefa operacional..."
-                    className="flex-grow pl-3 pr-2 py-1.5 border border-neutral-800 bg-neutral-950 text-xs rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-neutral-250 text-neutral-200"
+                    className="flex-grow pl-3 pr-2 py-1.5 border border-neutral-800 bg-neutral-950 text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-neutral-200 font-sans"
                   />
                   <button
                     onClick={() => handleAddTask(selectedCase)}
-                    className="px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded text-xs transition-colors"
+                    className="px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition-colors cursor-pointer"
                   >
                     Somar
                   </button>
@@ -758,7 +889,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
               {/* Dynamic updates Timeline */}
               <div className="space-y-4">
-                <h4 className="text-xs uppercase font-mono font-bold tracking-widest text-neutral-400 flex items-center space-x-1.5 border-b border-neutral-850 pb-2">
+                <h4 className="text-xs font-semibold text-neutral-300 flex items-center space-x-1.5 border-b border-neutral-800 pb-2 font-sans">
                   <Gavel className="w-4 h-4 text-emerald-500" />
                   <span>Andamentos / Movimentos</span>
                 </h4>
@@ -767,7 +898,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   {selectedCase.timeline && selectedCase.timeline.length > 0 ? (
                     selectedCase.timeline.map((node) => (
                       <div key={node.id} className="p-3 bg-neutral-950 rounded-lg border border-neutral-800 text-xs space-y-1">
-                        <div className="flex justify-between text-[10px] text-emerald-500 font-mono font-medium">
+                        <div className="flex justify-between text-xs text-emerald-400 font-sans font-medium">
                           <span>Diligência Realizada:</span>
                           <span>{node.date}</span>
                         </div>
@@ -775,7 +906,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       </div>
                     ))
                   ) : (
-                    <div className="text-[11px] text-neutral-500 italic py-2">Sem andamentos na timeline.</div>
+                    <div className="text-xs text-neutral-500 italic py-2 font-sans">Sem andamentos na timeline.</div>
                   )}
                 </div>
 
@@ -785,11 +916,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                     value={newTimelineMsg}
                     onChange={(e) => setNewTimelineMsg(e.target.value)}
                     placeholder="Descrever nova movimentação judicial..."
-                    className="w-full pl-3 pr-2 py-1.5 border border-neutral-800 bg-neutral-950 text-xs rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 text-neutral-200"
+                    className="w-full pl-3 pr-2 py-1.5 border border-neutral-800 bg-neutral-950 text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-neutral-200 font-sans"
                   />
                   <button
                     onClick={() => handleAddTimelineMsg(selectedCase)}
-                    className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded text-xs transition-colors block"
+                    className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg text-xs transition-colors block cursor-pointer"
                   >
                     Registrar Movimentação
                   </button>
@@ -800,19 +931,19 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
             {/* Client Messages Section */}
             <div className="space-y-4 border-t border-neutral-800 pt-5">
-              <h4 className="text-xs uppercase font-mono font-bold tracking-widest text-neutral-400 flex items-center space-x-1.5 border-b border-neutral-850 pb-2">
+              <h4 className="text-xs font-semibold text-neutral-300 flex items-center space-x-1.5 border-b border-neutral-800 pb-2 font-sans">
                 <MessageCircle className="w-4 h-4 text-emerald-500" />
                 <span>Mensagens do Cliente</span>
               </h4>
               
               <div className="bg-neutral-950 rounded-xl border border-neutral-800 flex flex-col h-64">
-                <div className="flex-grow p-3 overflow-y-auto space-y-3">
+                <div className="flex-grow p-3 overflow-y-auto space-y-3 font-sans">
                   {loadingMessages ? (
                     <div className="flex justify-center py-4">
                       <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
                     </div>
                   ) : messages.length === 0 ? (
-                    <div className="text-center py-8 text-[10px] text-neutral-500 font-mono">
+                    <div className="text-center py-8 text-xs text-neutral-500 font-sans">
                       Nenhuma mensagem neste processo.
                     </div>
                   ) : (
@@ -820,14 +951,14 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       const isAdminMsg = msg.senderRole === 'admin';
                       return (
                         <div key={msg.id} className={`flex flex-col ${isAdminMsg ? 'items-end' : 'items-start'}`}>
-                          <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-[11px] ${
+                          <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-xs font-sans ${
                             isAdminMsg 
                               ? 'bg-neutral-800 text-neutral-200 rounded-br-sm border border-neutral-700' 
                               : 'bg-emerald-900/40 text-emerald-100 rounded-bl-sm border border-emerald-800/50'
                           }`}>
                             {msg.text}
                           </div>
-                          <span className="text-[9px] text-neutral-500 mt-1 px-1">
+                          <span className="text-[10px] text-neutral-500 mt-1 px-1 font-sans">
                             {isAdminMsg ? 'Você' : 'Cliente'} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
@@ -843,12 +974,12 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       placeholder="Responder cliente..."
-                      className="flex-grow bg-neutral-950 border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      className="flex-grow bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-sans"
                     />
                     <button
                       type="submit"
                       disabled={!newMessage.trim()}
-                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white p-1.5 rounded-md transition-colors"
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white p-1.5 rounded-lg transition-colors cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -859,7 +990,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
             {/* Notes Section */}
             <div className="space-y-2 border-t border-neutral-800 pt-5 text-xs">
-              <label className="block text-xs uppercase font-mono font-bold tracking-widest text-neutral-400">Anotações Internas de Prática Legal:</label>
+              <label className="block text-xs font-semibold text-neutral-300 font-sans">Anotações Internas de Prática Legal:</label>
               <textarea
                 rows={4}
                 value={selectedCase.notes}
@@ -870,17 +1001,17 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                 className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 leading-relaxed font-sans"
                 placeholder="Observações de documentos judiciais rascunhados, contatos de testemunhas chaves..."
               />
-              <span className="text-[10px] text-neutral-500 mt-1 block">Anotações salvas automaticamente no banco de dados.</span>
+              <span className="text-[11px] text-neutral-500 mt-1 block font-sans">Anotações salvas automaticamente no banco de dados.</span>
             </div>
 
           </div>
 
           {/* Delete case utility */}
-          <div className="border-t border-neutral-800 pt-4 flex justify-between items-center bg-neutral-900 sticky bottom-0">
-            <span className="text-xs text-neutral-500 font-mono">Cliente ID: {selectedCase.clientId}</span>
+          <div className="border-t border-neutral-800 pt-4 flex justify-between items-center bg-neutral-900 sticky bottom-0 font-sans">
+            <span className="text-xs text-neutral-400 font-sans">Cliente ID: {selectedCase.clientId}</span>
             <button
               onClick={() => handleDeleteCase(selectedCase.id)}
-              className="px-3 py-1.5 hover:bg-red-950/20 text-red-400 hover:text-red-300 border border-red-900/40 rounded text-xs font-semibold flex items-center space-x-1 transition-colors"
+              className="px-3 py-1.5 hover:bg-red-950/20 text-red-400 hover:text-red-300 border border-red-900/40 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-colors cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Remover Processo</span>
@@ -892,13 +1023,13 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
       {/* Cadastration/Creation Modal overlay */}
       {isAdding && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-neutral-900 border border-neutral-800 p-6 sm:p-8 rounded-2xl max-w-lg w-full space-y-6">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 font-sans">
+          <div className="bg-neutral-900 border border-neutral-800 p-6 sm:p-8 rounded-2xl max-w-lg w-full space-y-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-neutral-800 pb-3">
-              <h3 className="text-md font-bold text-neutral-100 font-display">Cadastrar Novo Processo Representativo</h3>
+              <h3 className="text-base font-bold text-neutral-100 font-sans">Cadastrar Novo Processo Representativo</h3>
               <button 
                 onClick={() => setIsAdding(false)}
-                className="p-1 hover:bg-neutral-800 rounded font-semibold text-neutral-400"
+                className="p-1 hover:bg-neutral-800 rounded font-semibold text-neutral-400 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -907,11 +1038,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
             <form onSubmit={handleCreateCase} className="space-y-4">
               
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Associar ao Cliente (Opcional)</label>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Associar ao Cliente (Opcional)</label>
                 <select
                   value={newCase.clientId}
                   onChange={(e) => setNewCase({ ...newCase, clientId: e.target.value })}
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                 >
                   <option value="">-- Selecione o Cliente (Opcional) --</option>
                   {clients.map(cli => (
@@ -923,33 +1054,33 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
               </div>
 
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Título Identificador do Processo (Opcional)</label>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Título Identificador do Processo (Opcional)</label>
                 <input
                   type="text"
                   value={newCase.title}
                   onChange={(e) => setNewCase({ ...newCase, title: e.target.value })}
-                  placeholder="Ex: Reclamação das Horas Extras vs Cader Metal"
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                  placeholder="Ex: Reclamação Trabalhista vs Empresa XYZ"
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Nº Unificado de Processo (CNJ) (Opcional)</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Nº Unificado de Processo (CNJ) (Opcional)</label>
                   <input
                     type="text"
                     value={newCase.caseNumber}
                     onChange={(e) => setNewCase({ ...newCase, caseNumber: e.target.value })}
                     placeholder="Ex: 1002345-67.2026.5.02.0004"
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Sub-Área de Atuação</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Sub-Área de Atuação</label>
                   <select
                     value={newCase.area}
                     onChange={(e: any) => setNewCase({ ...newCase, area: e.target.value })}
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   >
                     <option value="Inventários e Partilhas">Inventários e Partilhas</option>
                     <option value="Direito Imobiliário">Direito Imobiliário</option>
@@ -961,25 +1092,56 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                 </div>
               </div>
 
+              {/* Informações de Tramitação */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Tribunal (Ex: TJSP, TRF3, TJMG, STJ)</label>
+                  <input
+                    type="text"
+                    value={newCase.tribunal}
+                    onChange={(e) => setNewCase({ ...newCase, tribunal: e.target.value })}
+                    placeholder="Ex: TJSP"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Órgão Julgador / Vara</label>
+                  <input
+                    type="text"
+                    value={newCase.orgaoJulgador}
+                    onChange={(e) => setNewCase({ ...newCase, orgaoJulgador: e.target.value })}
+                    placeholder="Ex: 2ª Vara Cível da Comarca da Capital"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
+                  />
+                </div>
+              </div>
+
+              {/* Link dos autos / processo */}
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Tribunal / Vara Judiciária Competente</label>
-                <input
-                  type="text"
-                  value={newCase.court}
-                  onChange={(e) => setNewCase({ ...newCase, court: e.target.value })}
-                  placeholder="Ex: 4ª Vara do Trabalho de São Paulo - Zona Leste"
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
-                />
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Link dos Autos / Portal do Processo</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500">
+                    <Link2 className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="url"
+                    value={newCase.processLink}
+                    onChange={(e) => setNewCase({ ...newCase, processLink: e.target.value })}
+                    placeholder="Ex: https://esaj.tjsp.jus.br/cpopg/show.do?processo.codigo=..."
+                    className="w-full pl-9 pr-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-500 mt-1 font-sans">Insira a URL para consulta direta dos autos no tribunal ou sistema eletrônico (PJe, e-SAJ, Projudi).</p>
               </div>
 
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Anotações de Largada / Sumário</label>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Anotações de Largada / Sumário</label>
                 <textarea
                   rows={2}
                   value={newCase.notes}
                   onChange={(e) => setNewCase({ ...newCase, notes: e.target.value })}
                   placeholder="Direcionamento básico de pretensão e petições..."
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
@@ -987,13 +1149,13 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                 <button
                   type="button"
                   onClick={() => setIsAdding(false)}
-                  className="px-4 py-2 border border-neutral-800 text-neutral-450 hover:bg-neutral-850 text-neutral-400 rounded-lg text-xs font-semibold"
+                  className="px-4 py-2 border border-neutral-800 text-neutral-300 hover:bg-neutral-800 rounded-lg text-xs font-semibold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-transform"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-transform cursor-pointer"
                 >
                   Salvar Processo
                 </button>
@@ -1005,10 +1167,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
       )}
 
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 font-sans">
           <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl max-w-sm w-full space-y-4">
-            <h3 className="text-md font-bold text-neutral-100 font-display">{deleteConfirm.title}</h3>
-            <p className="text-xs text-neutral-400 leading-relaxed">{deleteConfirm.message}</p>
+            <h3 className="text-base font-bold text-neutral-100 font-sans">{deleteConfirm.title}</h3>
+            <p className="text-xs text-neutral-400 leading-relaxed font-sans">{deleteConfirm.message}</p>
             <div className="flex justify-end space-x-3 pt-2">
               <button
                 type="button"
@@ -1045,13 +1207,13 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
       {/* Edit Modal overlay */}
       {editingCase && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 font-sans">
           <div className="bg-neutral-900 border border-neutral-800 p-6 sm:p-8 rounded-2xl max-w-lg w-full space-y-6 overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center border-b border-neutral-800 pb-3">
-              <h3 className="text-md font-bold text-neutral-100 font-display">Editar Processo Representativo</h3>
+              <h3 className="text-base font-bold text-neutral-100 font-sans">Editar Processo Representativo</h3>
               <button 
                 onClick={() => setEditingCase(null)}
-                className="p-1 hover:bg-neutral-800 rounded font-semibold text-neutral-400"
+                className="p-1 hover:bg-neutral-800 rounded font-semibold text-neutral-400 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1060,7 +1222,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
             <form onSubmit={handleUpdateCase} className="space-y-4">
               
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Associar ao Cliente</label>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Associar ao Cliente</label>
                 <select
                   value={editingCase.clientId}
                   onChange={(e) => {
@@ -1071,7 +1233,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                       clientName: selectedClient ? selectedClient.name : 'Cliente Geral / Avulso'
                     });
                   }}
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                 >
                   <option value="">-- Selecione o Cliente (Opcional) --</option>
                   <option value="avulso">Cliente Geral / Avulso</option>
@@ -1084,34 +1246,34 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
               </div>
 
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Título Identificador do Processo</label>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Título Identificador do Processo</label>
                 <input
                   type="text"
                   required
                   value={editingCase.title}
                   onChange={(e) => setEditingCase({ ...editingCase, title: e.target.value })}
-                  placeholder="Ex: Reclamação das Horas Extras vs Cader Metal"
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                  placeholder="Ex: Reclamação Trabalhista vs Empresa XYZ"
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Nº Unificado de Processo (CNJ)</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Nº Unificado de Processo (CNJ)</label>
                   <input
                     type="text"
                     value={editingCase.caseNumber}
                     onChange={(e) => setEditingCase({ ...editingCase, caseNumber: e.target.value })}
                     placeholder="Ex: 1002345-67.2026.5.02.0004"
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Sub-Área de Atuação</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Sub-Área de Atuação</label>
                   <select
                     value={editingCase.area}
                     onChange={(e: any) => setEditingCase({ ...editingCase, area: e.target.value })}
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   >
                     <option value="Inventários e Partilhas">Inventários e Partilhas</option>
                     <option value="Direito Imobiliário">Direito Imobiliário</option>
@@ -1125,11 +1287,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Situação do Processo</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Situação do Processo</label>
                   <select
                     value={editingCase.status}
                     onChange={(e: any) => setEditingCase({ ...editingCase, status: e.target.value })}
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   >
                     <option value="Em andamento">Em andamento</option>
                     <option value="Suspenso">Suspenso</option>
@@ -1138,48 +1300,78 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Valor Estimado do Caso (R$)</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Valor Estimado do Caso (R$)</label>
                   <input
                     type="number"
                     step="0.01"
                     value={editingCase.value !== undefined ? editingCase.value : ''}
                     onChange={(e) => setEditingCase({ ...editingCase, value: e.target.value ? Number(e.target.value) : undefined })}
                     placeholder="Ex: 50000.00"
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   />
                 </div>
               </div>
 
+              {/* Informações de Tramitação */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Tribunal / Vara Competente</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Tribunal (Ex: TJSP, TRF3, TJMG, STJ)</label>
                   <input
                     type="text"
-                    value={editingCase.court}
-                    onChange={(e) => setEditingCase({ ...editingCase, court: e.target.value })}
-                    placeholder="Ex: 4ª Vara do Trabalho"
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    value={editingCase.tribunal || ''}
+                    onChange={(e) => setEditingCase({ ...editingCase, tribunal: e.target.value })}
+                    placeholder="Ex: TJSP"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Data de Registro/Abertura</label>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Órgão Julgador / Vara</label>
                   <input
-                    type="date"
-                    value={editingCase.createdAt ? editingCase.createdAt.split('T')[0] : ''}
-                    onChange={(e) => setEditingCase({ ...editingCase, createdAt: e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : new Date().toISOString() })}
-                    className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                    type="text"
+                    value={editingCase.orgaoJulgador || ''}
+                    onChange={(e) => setEditingCase({ ...editingCase, orgaoJulgador: e.target.value })}
+                    placeholder="Ex: 4ª Vara Cível"
+                    className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                   />
                 </div>
+              </div>
+
+              {/* Link dos autos / processo */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Link dos Autos / Portal do Processo</label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500">
+                    <Link2 className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="url"
+                    value={editingCase.processLink || ''}
+                    onChange={(e) => setEditingCase({ ...editingCase, processLink: e.target.value })}
+                    placeholder="Ex: https://esaj.tjsp.jus.br/cpopg/show.do?..."
+                    className="w-full pl-9 pr-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-500 mt-1 font-sans">Link de acesso direto aos autos do processo para consulta rápida.</p>
               </div>
 
               <div>
-                <label className="block text-xs uppercase font-mono font-bold tracking-wider mb-1.5 text-neutral-400">Descrição / Anotações</label>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Data de Registro/Abertura</label>
+                <input
+                  type="date"
+                  value={editingCase.createdAt ? editingCase.createdAt.split('T')[0] : ''}
+                  onChange={(e) => setEditingCase({ ...editingCase, createdAt: e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : new Date().toISOString() })}
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">Descrição / Anotações</label>
                 <textarea
                   rows={3}
                   value={editingCase.notes}
                   onChange={(e) => setEditingCase({ ...editingCase, notes: e.target.value })}
                   placeholder="Direcionamento básico de pretensão e petições..."
-                  className="w-full px-3 py-2 border border-neutral-850 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none"
+                  className="w-full px-3 py-2 border border-neutral-800 bg-neutral-950 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
@@ -1187,13 +1379,13 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                 <button
                   type="button"
                   onClick={() => setEditingCase(null)}
-                  className="px-4 py-2 border border-neutral-800 text-neutral-400 hover:bg-neutral-850 rounded-lg text-xs font-semibold"
+                  className="px-4 py-2 border border-neutral-800 text-neutral-300 hover:bg-neutral-800 rounded-lg text-xs font-semibold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-transform"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-transform cursor-pointer"
                 >
                   Salvar Alterações
                 </button>
@@ -1206,7 +1398,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
       {/* Export Options Modal (PDF & CSV) */}
       {exportModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn font-sans">
           <div className="bg-neutral-900 border border-neutral-800 p-6 sm:p-7 rounded-2xl max-w-lg w-full space-y-6 shadow-2xl">
             
             <div className="flex justify-between items-start border-b border-neutral-800 pb-4">
@@ -1215,7 +1407,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   {exportFormat === 'csv' ? <FileSpreadsheet className="w-5 h-5" /> : <FileDown className="w-5 h-5" />}
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-neutral-100 font-display">Exportar Relatórios e Dados</h3>
+                  <h3 className="text-base font-bold text-neutral-100 font-sans">Exportar Relatórios e Dados</h3>
                   <p className="text-xs text-neutral-400">Geração de planilhas CSV para relatórios e BI, ou documentos oficiais em PDF.</p>
                 </div>
               </div>
@@ -1231,7 +1423,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
               
               {/* Format Selector: CSV vs PDF */}
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-300 mb-2 font-mono">
+                <label className="block text-xs font-semibold text-neutral-300 mb-2 font-sans">
                   Formato do Arquivo
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -1246,8 +1438,8 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   >
                     <FileSpreadsheet className={`w-5 h-5 shrink-0 ${exportFormat === 'csv' ? 'text-emerald-400' : 'text-neutral-500'}`} />
                     <div className="min-w-0">
-                      <strong className="text-xs block text-neutral-200 truncate">Planilha CSV</strong>
-                      <span className="text-[10px] text-neutral-400 block truncate">Excel, Sheets & BI</span>
+                      <strong className="text-xs block text-neutral-200 truncate font-sans">Planilha CSV</strong>
+                      <span className="text-[10px] text-neutral-400 block truncate font-sans">Excel, Sheets & BI</span>
                     </div>
                   </button>
 
@@ -1262,8 +1454,8 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   >
                     <FileDown className={`w-5 h-5 shrink-0 ${exportFormat === 'pdf' ? 'text-emerald-400' : 'text-neutral-500'}`} />
                     <div className="min-w-0">
-                      <strong className="text-xs block text-neutral-200 truncate">Documento PDF</strong>
-                      <span className="text-[10px] text-neutral-400 block truncate">Oficial para Impressão</span>
+                      <strong className="text-xs block text-neutral-200 truncate font-sans">Documento PDF</strong>
+                      <span className="text-[10px] text-neutral-400 block truncate font-sans">Oficial para Impressão</span>
                     </div>
                   </button>
                 </div>
@@ -1271,7 +1463,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
               {/* Report Type Selector */}
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-300 mb-2 font-mono">
+                <label className="block text-xs font-semibold text-neutral-300 mb-2 font-sans">
                   Modalidade do Relatório
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -1285,10 +1477,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <strong className="text-xs text-neutral-200">Consolidado Geral</strong>
+                      <strong className="text-xs text-neutral-200 font-sans">Consolidado Geral</strong>
                       <span className={`w-2 h-2 rounded-full ${exportType === 'summary' ? 'bg-emerald-400' : 'bg-neutral-700'}`} />
                     </div>
-                    <p className="text-[11px] text-neutral-400 leading-tight">
+                    <p className="text-[11px] text-neutral-400 leading-tight font-sans">
                       Visão tabular completa de processos da carteira com dados do cliente e andamentos.
                     </p>
                   </button>
@@ -1303,10 +1495,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <strong className="text-xs text-neutral-200">Processo Específico</strong>
+                      <strong className="text-xs text-neutral-200 font-sans">Processo Específico</strong>
                       <span className={`w-2 h-2 rounded-full ${exportType === 'single' ? 'bg-emerald-400' : 'bg-neutral-700'}`} />
                     </div>
-                    <p className="text-[11px] text-neutral-400 leading-tight">
+                    <p className="text-[11px] text-neutral-400 leading-tight font-sans">
                       Ficha detalhada com timeline cronológica completa, tarefas e pareceres.
                     </p>
                   </button>
@@ -1315,7 +1507,7 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
               {/* Conditional Options */}
               {exportType === 'summary' ? (
-                <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-850 space-y-3">
+                <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-850 space-y-3 font-sans">
                   <span className="text-xs font-semibold text-neutral-300 block">Escopo da Exportação:</span>
                   <div className="space-y-2 text-xs">
                     <label className="flex items-center space-x-2.5 cursor-pointer text-neutral-300">
@@ -1341,15 +1533,15 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   </div>
                 </div>
               ) : (
-                <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-850 space-y-3.5">
+                <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-850 space-y-3.5 font-sans">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5 font-sans">
                       Selecione o Processo para o Relatório:
                     </label>
                     <select
                       value={exportTargetCaseId}
                       onChange={(e) => setExportTargetCaseId(e.target.value)}
-                      className="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 cursor-pointer"
+                      className="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-500 cursor-pointer font-sans"
                     >
                       {cases.map(cs => (
                         <option key={cs.id} value={cs.id}>
@@ -1360,8 +1552,8 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                   </div>
 
                   {exportFormat === 'pdf' && (
-                    <div className="space-y-2 pt-2 border-t border-neutral-800/80">
-                      <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-400 block font-semibold">
+                    <div className="space-y-2 pt-2 border-t border-neutral-800/80 font-sans">
+                      <span className="text-xs text-neutral-400 block font-semibold font-sans">
                         Seções Incluídas no Relatório PDF:
                       </span>
                       <div className="space-y-2 text-xs text-neutral-300">
