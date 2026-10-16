@@ -1,4 +1,4 @@
-const CACHE_NAME = 'almeida-advocacia-v2';
+const CACHE_NAME = 'almeida-advocacia-v3';
 
 // Force immediate activation
 self.addEventListener('install', (event) => {

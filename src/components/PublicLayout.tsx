@@ -53,10 +53,16 @@ export default function PublicLayout() {
             <Link to="/" className="flex items-center space-x-3.5 group">
               <div className="relative flex-shrink-0">
                 <img 
-                  src="/imagens/logo.png" 
+                  src="/imagens/logo.png?v=3" 
                   alt="Almeida Advocacia Logo" 
                   className="w-12 h-12 object-contain transition-transform duration-300 group-hover:scale-105" 
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.src.includes('/favicon.png')) {
+                      target.src = '/favicon.png?v=3';
+                    }
+                  }}
                 />
               </div>
               <div className="flex flex-col select-none leading-none">
