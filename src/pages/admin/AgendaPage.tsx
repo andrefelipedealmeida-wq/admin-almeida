@@ -787,9 +787,12 @@ function EventLogsSection({ evt, onAddLog, onDeleteLog, onEditLog }: EventLogsSe
   };
 
   const handleSaveEdit = (logId: string) => {
-    if (editingText.trim()) {
-      onEditLog(evt, logId, editingText.trim());
+    const trimmed = editingText.trim();
+    if (!trimmed) {
+      toast.error('O texto da anotação não pode ficar vazio.');
+      return;
     }
+    onEditLog(evt, logId, trimmed);
     setEditingLogId(null);
     setEditingText('');
   };
@@ -813,7 +816,7 @@ function EventLogsSection({ evt, onAddLog, onDeleteLog, onEditLog }: EventLogsSe
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder="Escreva uma nova anotação / log para salvar neste compromisso..."
-          className="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-600/60 placeholder-neutral-500 resize-none"
+          className="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-xs text-neutral-200 focus:outline-none focus:border-emerald-600/60 placeholder-neutral-500 resize-none font-sans"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault();
@@ -890,23 +893,41 @@ function EventLogsSection({ evt, onAddLog, onDeleteLog, onEditLog }: EventLogsSe
                     rows={2}
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-neutral-950 border border-neutral-800 rounded text-xs text-neutral-200 focus:outline-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                        handleSaveEdit(log.id);
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setEditingLogId(null);
+                        setEditingText('');
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-xs text-neutral-100 font-sans focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 resize-none leading-relaxed"
+                    autoFocus
                   />
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setEditingLogId(null)}
-                      className="px-2 py-0.5 bg-neutral-800 text-neutral-400 rounded text-[10px] font-bold cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSaveEdit(log.id)}
-                      className="px-2.5 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold cursor-pointer"
-                    >
-                      Salvar
-                    </button>
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="text-neutral-500">Ctrl+Enter salva • Esc cancela</span>
+                    <div className="flex space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLogId(null);
+                          setEditingText('');
+                        }}
+                        className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 rounded text-xs font-semibold cursor-pointer transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEdit(log.id)}
+                        disabled={!editingText.trim()}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded text-xs font-semibold cursor-pointer transition-colors shadow-sm"
+                      >
+                        Salvar
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -1700,6 +1721,8 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
   });
 
   const [formLogInput, setFormLogInput] = useState('');
+  const [editingFormLogId, setEditingFormLogId] = useState<string | null>(null);
+  const [editingFormLogText, setEditingFormLogText] = useState('');
 
   const handleAddFormLog = () => {
     if (!formLogInput.trim()) return;
@@ -1717,11 +1740,40 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
     toast.success('Anotação adicionada ao formulário!');
   };
 
+  const handleStartEditFormLog = (log: EventLog) => {
+    setEditingFormLogId(log.id);
+    setEditingFormLogText(log.text);
+  };
+
+  const handleSaveEditFormLog = (logId: string) => {
+    const trimmed = editingFormLogText.trim();
+    if (!trimmed) {
+      toast.error('O texto da anotação não pode ficar vazio.');
+      return;
+    }
+    setNewEvent(prev => ({
+      ...prev,
+      logs: (prev.logs || []).map(l => l.id === logId ? { ...l, text: trimmed } : l)
+    }));
+    setEditingFormLogId(null);
+    setEditingFormLogText('');
+    toast.success('Anotação atualizada no formulário!');
+  };
+
+  const handleCancelEditFormLog = () => {
+    setEditingFormLogId(null);
+    setEditingFormLogText('');
+  };
+
   const handleRemoveFormLog = (logId: string) => {
     setNewEvent(prev => ({
       ...prev,
       logs: (prev.logs || []).filter(l => l.id !== logId)
     }));
+    if (editingFormLogId === logId) {
+      setEditingFormLogId(null);
+      setEditingFormLogText('');
+    }
   };
 
   // Calendar math
@@ -3382,22 +3434,76 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                       <div className="space-y-2.5 max-h-48 overflow-y-auto pt-2 border-t border-neutral-800/80">
                         <span className="text-xs font-medium text-neutral-400 font-sans block">Logs salvos neste compromisso:</span>
                         {newEvent.logs.map((log) => (
-                          <div key={log.id} className="bg-neutral-900 p-3 rounded-xl border border-neutral-800 text-xs font-sans space-y-1.5 relative">
+                          <div key={log.id} className="bg-neutral-900 p-3 rounded-xl border border-neutral-800 text-xs font-sans space-y-2 relative">
                             <div className="flex justify-between items-center text-xs font-medium text-emerald-400">
                               <span className="flex items-center space-x-1.5">
                                 <Clock className="w-3.5 h-3.5 text-emerald-500" />
                                 <span className="text-neutral-400">{log.createdAt}</span>
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveFormLog(log.id)}
-                                className="text-neutral-500 hover:text-red-400 transition-colors p-1 cursor-pointer"
-                                title="Excluir esta anotação"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center space-x-1">
+                                {editingFormLogId !== log.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditFormLog(log)}
+                                    className="text-neutral-400 hover:text-neutral-200 transition-colors p-1 cursor-pointer rounded hover:bg-neutral-800"
+                                    title="Editar esta anotação"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFormLog(log.id)}
+                                  className="text-neutral-500 hover:text-red-400 transition-colors p-1 cursor-pointer rounded hover:bg-neutral-800"
+                                  title="Excluir esta anotação"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                            <p className="text-neutral-200 whitespace-pre-wrap leading-relaxed">{log.text}</p>
+
+                            {editingFormLogId === log.id ? (
+                              <div className="space-y-2 pt-1">
+                                <textarea
+                                  rows={2}
+                                  value={editingFormLogText}
+                                  onChange={(e) => setEditingFormLogText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                                      e.preventDefault();
+                                      handleSaveEditFormLog(log.id);
+                                    } else if (e.key === 'Escape') {
+                                      e.preventDefault();
+                                      handleCancelEditFormLog();
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 bg-neutral-950 border border-neutral-700 rounded-lg text-xs text-neutral-100 font-sans focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 resize-none leading-relaxed"
+                                  autoFocus
+                                />
+                                <div className="flex justify-between items-center text-[10px]">
+                                  <span className="text-neutral-500">Ctrl+Enter salva • Esc cancela</span>
+                                  <div className="flex space-x-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={handleCancelEditFormLog}
+                                      className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 rounded text-xs font-semibold cursor-pointer transition-colors"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveEditFormLog(log.id)}
+                                      disabled={!editingFormLogText.trim()}
+                                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded text-xs font-semibold cursor-pointer transition-colors shadow-sm"
+                                    >
+                                      Salvar
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-neutral-200 whitespace-pre-wrap leading-relaxed">{log.text}</p>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -3590,7 +3696,7 @@ export default function AgendaPage({ events, clients = [], cases = [], sidebarCo
                 )}
               </div>
 
-              {selectedEventDetails.type !== 'lembrete' && (
+              {(selectedEventDetails.type !== 'lembrete' || (selectedEventDetails.logs && selectedEventDetails.logs.length > 0)) && (
                 <EventLogsSection
                   evt={selectedEventDetails}
                   onAddLog={handleAddLogOnDatabase}
