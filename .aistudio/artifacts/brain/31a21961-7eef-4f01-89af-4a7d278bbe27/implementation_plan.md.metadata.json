@@ -1,6 +1,6 @@
 {
-  "summary": "Plano de implementação concluído com sucesso para a funcionalidade de edição inline de logs e anotações na agenda.",
-  "updatedAt": "2026-10-16T18:29:19.341816940Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Plano de implementação para vincular o serviço de Push dos Tribunais aos processos judiciais do escritório Almeida Advocacia, integrando acompanhamento processual oficial, disparos de notificações push nativas e sincronização de andamentos, prazos e mudanças de status.",
+  "updatedAt":  "2026-10-22T15:07:59.078552384Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }

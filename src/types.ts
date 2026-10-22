@@ -56,6 +56,18 @@ export interface CaseTimeline {
   message: string;
 }
 
+export interface CourtPushConfig {
+  enabled: boolean;
+  tribunal?: string;
+  subscribedEmail?: string;
+  subscriptionDate?: string;
+  lastCheckDate?: string;
+  status: 'ativo' | 'pendente' | 'desativado';
+  serviceType: 'esaj' | 'pje' | 'projudi' | 'eproc' | 'cnj_datajud' | 'outro';
+  pushId?: string;
+  notes?: string;
+}
+
 export interface Case {
   id: string;
   title: string;
@@ -76,6 +88,7 @@ export interface Case {
   deleted?: boolean;
   deletedAt?: string;
   userId?: string;
+  courtPush?: CourtPushConfig;
 }
 
 export interface SubEvent {

@@ -26,9 +26,15 @@ import {
   ExternalLink,
   Copy,
   Landmark,
-  Building2
+  Building2,
+  Bell,
+  BellRing,
+  Radio,
+  Check,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
-import { Case, Client, CaseTimeline, CaseTask, CaseMessage } from '../../types';
+import { Case, Client, CaseTimeline, CaseTask, CaseMessage, CourtPushConfig } from '../../types';
 import { collection, setDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
 import { db, auth } from '../../firebase';
 import { toast } from 'sonner';
@@ -42,6 +48,12 @@ import {
   generateSingleCaseDetailedCsv,
   downloadCsvFile
 } from '../../utils/caseCsvExporter';
+import {
+  identifyTribunalFromCNJ,
+  dispatchCasePushNotification,
+  OFFICIAL_PUSH_TEMPLATES,
+  playChimeSound
+} from '../../utils/courtPushHelper';
 
 interface CasesPageProps {
   cases: Case[];
@@ -260,6 +272,162 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
   // Task inputs
   const [newTaskText, setNewTaskText] = useState('');
 
+  // Push Oficial dos Tribunais & Alertas States
+  const [pushFilter, setPushFilter] = useState<'Todos' | 'Ativos' | 'Pendentes'>('Todos');
+  const [isEditingPush, setIsEditingPush] = useState(false);
+  const [showPushSimulator, setShowPushSimulator] = useState(false);
+  const [pushForm, setPushForm] = useState<CourtPushConfig>({
+    enabled: true,
+    status: 'ativo',
+    serviceType: 'esaj',
+    subscribedEmail: '',
+    notes: '',
+    subscriptionDate: new Date().toISOString().split('T')[0]
+  });
+  const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  });
+
+  // Sincroniza formulário de push com o caso selecionado
+  useEffect(() => {
+    if (selectedCase) {
+      const defaultTribunal = identifyTribunalFromCNJ(selectedCase.caseNumber);
+      setPushForm({
+        enabled: selectedCase.courtPush?.enabled ?? false,
+        status: selectedCase.courtPush?.status ?? 'pendente',
+        serviceType: selectedCase.courtPush?.serviceType ?? defaultTribunal.system,
+        tribunal: selectedCase.courtPush?.tribunal || selectedCase.tribunal || defaultTribunal.shortName,
+        subscribedEmail: selectedCase.courtPush?.subscribedEmail || auth.currentUser?.email || '',
+        subscriptionDate: selectedCase.courtPush?.subscriptionDate || new Date().toISOString().split('T')[0],
+        lastCheckDate: selectedCase.courtPush?.lastCheckDate || '',
+        notes: selectedCase.courtPush?.notes || ''
+      });
+      setIsEditingPush(false);
+      setShowPushSimulator(false);
+    }
+  }, [selectedCase]);
+
+  const requestPushPermission = () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      toast.error('Este dispositivo ou navegador não oferece suporte a notificações nativas de push.');
+      return;
+    }
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') {
+        setHasNotificationPermission(true);
+        toast.success('Notificações de push ativadas com sucesso!');
+        dispatchCasePushNotification(
+          'Push Oficial Ativado • Almeida Advocacia',
+          'Você receberá notificações instantâneas de andamentos e prazos judiciais.'
+        );
+      } else {
+        toast.info('Permissão para notificações não foi autorizada no navegador.');
+      }
+    });
+  };
+
+  const handleSavePushConfig = async () => {
+    if (!selectedCase) return;
+    try {
+      const updatedPush: CourtPushConfig = {
+        ...pushForm,
+        lastCheckDate: new Date().toISOString().split('T')[0]
+      };
+      await updateDoc(doc(db, 'cases', selectedCase.id), {
+        courtPush: updatedPush
+      });
+      const updatedCase: Case = {
+        ...selectedCase,
+        courtPush: updatedPush
+      };
+      setSelectedCase(updatedCase);
+      setIsEditingPush(false);
+      toast.success(
+        updatedPush.enabled 
+          ? `Push do Tribunal (${updatedPush.tribunal || 'Oficial'}) vinculado com sucesso!` 
+          : 'Configurações de push salvas.'
+      );
+      if (updatedPush.enabled) {
+        dispatchCasePushNotification(
+          `Vínculo de Push Ativo • ${selectedCase.title}`,
+          `Processo ${selectedCase.caseNumber || 'S/N'} monitorado com sucesso.`
+        );
+      }
+    } catch (err) {
+      console.error('Error saving court push config:', err);
+      toast.error('Erro ao salvar vínculo de push do tribunal.');
+    }
+  };
+
+  const handleTogglePushQuick = async (cs: Case, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      const currentEnabled = !!cs.courtPush?.enabled;
+      const detectedTribunal = identifyTribunalFromCNJ(cs.caseNumber);
+      const newPush: CourtPushConfig = {
+        enabled: !currentEnabled,
+        status: !currentEnabled ? 'ativo' : 'desativado',
+        tribunal: cs.courtPush?.tribunal || cs.tribunal || detectedTribunal.shortName,
+        serviceType: cs.courtPush?.serviceType || detectedTribunal.system,
+        subscribedEmail: cs.courtPush?.subscribedEmail || auth.currentUser?.email || '',
+        subscriptionDate: cs.courtPush?.subscriptionDate || new Date().toISOString().split('T')[0],
+        lastCheckDate: new Date().toISOString().split('T')[0]
+      };
+      await updateDoc(doc(db, 'cases', cs.id), { courtPush: newPush });
+      if (selectedCase && selectedCase.id === cs.id) {
+        setSelectedCase({ ...selectedCase, courtPush: newPush });
+      }
+      toast.success(
+        !currentEnabled 
+          ? `Push oficial ativado para: ${cs.title}` 
+          : `Push do tribunal desativado para: ${cs.title}`
+      );
+      if (!currentEnabled) {
+        dispatchCasePushNotification(
+          `Push Oficial Vinculado • ${cs.title}`,
+          `Processo ${cs.caseNumber} vinculado ao Push do ${newPush.tribunal}.`
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao alternar status do push.');
+    }
+  };
+
+  const handleApplyOfficialPushTemplate = async (template: { tipo: string; descricao: string }) => {
+    if (!selectedCase) return;
+    try {
+      const newTimelineNode: CaseTimeline = {
+        id: 'push_' + Math.random().toString(36).substr(2, 9),
+        date: new Date().toISOString().split('T')[0],
+        message: `[Push Oficial - ${selectedCase.courtPush?.tribunal || selectedCase.tribunal || 'Tribunal'}] ${template.tipo}: ${template.descricao}`
+      };
+      const updatedTimeline = [newTimelineNode, ...selectedCase.timeline];
+      await updateDoc(doc(db, 'cases', selectedCase.id), {
+        timeline: updatedTimeline,
+        'courtPush.lastCheckDate': new Date().toISOString().split('T')[0]
+      });
+      setSelectedCase({
+        ...selectedCase,
+        timeline: updatedTimeline,
+        courtPush: selectedCase.courtPush ? {
+          ...selectedCase.courtPush,
+          lastCheckDate: new Date().toISOString().split('T')[0]
+        } : undefined
+      });
+      setShowPushSimulator(false);
+      toast.success('Andamento oficial registrado via Push do Tribunal!');
+      // Disparo de notificação push
+      dispatchCasePushNotification(
+        `Push Oficial: ${template.tipo} • ${selectedCase.title}`,
+        `${template.descricao} (${selectedCase.courtPush?.tribunal || selectedCase.tribunal || 'Tribunal'})`
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('Erro ao registrar andamento do push.');
+    }
+  };
+
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -291,6 +459,15 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
           { id: 'initial', date: new Date().toISOString().split('T')[0], message: 'Instalação e distribuição preliminar do processo de representação.' }
         ],
         tasks: [],
+        courtPush: {
+          enabled: true,
+          status: 'ativo',
+          tribunal: tribunal || identifyTribunalFromCNJ(finalCaseNumber).shortName,
+          serviceType: identifyTribunalFromCNJ(finalCaseNumber).system,
+          subscriptionDate: new Date().toISOString().split('T')[0],
+          subscribedEmail: auth.currentUser?.email || '',
+          lastCheckDate: new Date().toISOString().split('T')[0]
+        },
         createdAt: new Date().toISOString()
       };
 
@@ -299,7 +476,12 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
       if (processLink) addedData.processLink = processLink;
 
       await setDoc(doc(db, 'cases', generatedCaseId), addedData);
-      toast.success('Novo processo cadastrado e integrado com sucesso!');
+      toast.success('Novo processo cadastrado e vinculado ao Push do Tribunal!');
+      // Disparo de notificação push
+      dispatchCasePushNotification(
+        `Novo Processo Cadastrado • ${finalTitle}`,
+        `Processo ${finalCaseNumber} vinculado ao Push do ${addedData.courtPush.tribunal}.`
+      );
       setIsAdding(false);
       setNewCase({
         title: '',
@@ -395,9 +577,10 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
   const handleAddTask = async (cs: Case) => {
     if (!newTaskText.trim()) return;
+    const taskContent = newTaskText.trim();
     const newTask: CaseTask = {
       id: Math.random().toString(36).substr(2, 9),
-      text: newTaskText,
+      text: taskContent,
       completed: false
     };
 
@@ -407,6 +590,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
       setSelectedCase({ ...cs, tasks: updatedTasks });
       setNewTaskText('');
       toast.success('Incumbência adicionada.');
+      // Disparo de notificação push nativa para o dispositivo
+      dispatchCasePushNotification(
+        `Novo Prazo/Incumbência • ${cs.title}`,
+        `Meta cadastrada: "${taskContent}" (Processo: ${cs.caseNumber || 'S/N'})`
+      );
     } catch (err) {
       console.error(err);
     }
@@ -414,10 +602,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
   const handleAddTimelineMsg = async (cs: Case) => {
     if (!newTimelineMsg.trim()) return;
+    const msgContent = newTimelineMsg.trim();
     const newTimelineNode: CaseTimeline = {
       id: Math.random().toString(36).substr(2, 9),
       date: new Date().toISOString().split('T')[0],
-      message: newTimelineMsg
+      message: msgContent
     };
 
     const updatedTimeline = [newTimelineNode, ...cs.timeline];
@@ -426,6 +615,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
       setSelectedCase({ ...cs, timeline: updatedTimeline });
       setNewTimelineMsg('');
       toast.success('Movimentação processual registrada.');
+      // Disparo de notificação push nativa para o dispositivo
+      dispatchCasePushNotification(
+        `Novo Andamento Registrado • ${cs.title}`,
+        `Andamento: "${msgContent}" (Processo: ${cs.caseNumber || 'S/N'})`
+      );
     } catch (err) {
       console.error(err);
     }
@@ -444,6 +638,11 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
       await updateDoc(doc(db, 'cases', cs.id), { status: newStatus });
       setSelectedCase({ ...cs, status: newStatus });
       toast.success(`Situação do processo atualizada para: ${newStatus}`);
+      // Disparo de notificação push nativa para o dispositivo
+      dispatchCasePushNotification(
+        `Situação Processual Alterada • ${cs.title}`,
+        `Processo ${cs.caseNumber || ''} agora está: ${newStatus}`
+      );
     } catch (err) {
       console.error(err);
     }
@@ -462,7 +661,12 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
 
     const matchesStatus = statusFilter === 'Todos' || cs.status === statusFilter;
     const matchesArea = areaFilter === 'Todos' || cs.area === areaFilter;
-    return matchesSearch && matchesStatus && matchesArea;
+    const matchesPush = 
+      pushFilter === 'Todos' ||
+      (pushFilter === 'Ativos' && !!cs.courtPush?.enabled) ||
+      (pushFilter === 'Pendentes' && !cs.courtPush?.enabled);
+
+    return matchesSearch && matchesStatus && matchesArea && matchesPush;
   });
 
   return (
@@ -546,6 +750,18 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
           </select>
         </div>
 
+        <div>
+          <select
+            value={pushFilter}
+            onChange={(e: any) => setPushFilter(e.target.value)}
+            className="w-full border border-neutral-800 bg-neutral-950 px-3 py-2 text-xs rounded-lg focus:outline-none text-neutral-200 font-sans cursor-pointer"
+          >
+            <option value="Todos">Push Tribunal: Todos</option>
+            <option value="Ativos">Push Tribunal: Ativos</option>
+            <option value="Pendentes">Push Tribunal: Pendentes</option>
+          </select>
+        </div>
+
         <div className="flex items-center justify-between md:justify-end gap-3 text-xs">
           <label className="flex items-center space-x-2 text-neutral-400 hover:text-neutral-200 cursor-pointer select-none">
             <input
@@ -566,129 +782,220 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
         {/* Cases List */}
         <div className="lg:col-span-12 space-y-4">
           <div className="bg-neutral-900 rounded-xl border border-neutral-800 overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[850px]">
-              <thead className="bg-neutral-950 border-b border-neutral-800 text-xs text-neutral-400 font-sans tracking-normal">
+            <table className="w-full text-left border-collapse min-w-[980px]">
+              <thead className="bg-neutral-950/80 border-b border-neutral-800 text-[11px] uppercase tracking-wider text-neutral-400 font-sans font-semibold">
                 <tr>
-                  <th className="px-6 py-3.5 font-semibold">Título do Processo & Tramitação</th>
-                  <th className="px-6 py-3.5 font-semibold">Nº Unificado (CNJ)</th>
-                  <th className="px-6 py-3.5 font-semibold">Cliente</th>
-                  <th className="px-6 py-3.5 font-semibold">Área</th>
-                  <th className="px-6 py-3.5 font-semibold">Situação</th>
-                  <th className="px-6 py-3.5 text-right font-semibold">Ações</th>
+                  <th className="px-4 py-3 min-w-[260px] max-w-[320px]">Processo & Tramitação</th>
+                  <th className="px-4 py-3 min-w-[190px] whitespace-nowrap">Nº Unificado (CNJ)</th>
+                  <th className="px-4 py-3 min-w-[150px] max-w-[190px]">Cliente</th>
+                  <th className="px-4 py-3 min-w-[130px] whitespace-nowrap">Área</th>
+                  <th className="px-4 py-3 min-w-[120px] whitespace-nowrap">Situação</th>
+                  <th className="px-4 py-3 min-w-[100px] whitespace-nowrap">Push Tribunal</th>
+                  <th className="px-4 py-3 min-w-[180px] text-right whitespace-nowrap">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800/60 text-xs font-sans">
+              <tbody className="divide-y divide-neutral-800/50 text-xs font-sans">
                 {filteredCases.length > 0 ? (
-                  filteredCases.map((cs) => (
-                    <tr 
-                      key={cs.id} 
-                      className={`hover:bg-neutral-850/50 cursor-pointer transition-colors ${selectedCase?.id === cs.id ? 'bg-neutral-850' : ''}`}
-                      onClick={() => setSelectedCase(cs)}
-                    >
-                      <td className="px-6 py-4">
-                        <span className="font-semibold text-neutral-200 block text-sm">{cs.title}</span>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-1 text-xs">
-                          {cs.tribunal && (
-                            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                              {cs.tribunal}
-                            </span>
-                          )}
-                          <span className="text-neutral-400">
-                            {cs.orgaoJulgador || cs.court || 'Não especificado'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-neutral-300 text-xs font-sans">
-                        {cs.caseNumber}
-                      </td>
-                      <td className="px-6 py-4 font-medium text-emerald-400 text-xs">
-                        {cs.clientName}
-                      </td>
-                      <td className="px-6 py-4 space-y-1">
-                        <span className="bg-neutral-950 border border-neutral-800 text-xs px-2.5 py-1 rounded-md text-neutral-300 font-medium">
-                          {cs.area}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 text-xs font-medium rounded-md ${
-                          cs.status === 'Em andamento' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
-                          cs.status === 'Suspenso' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-neutral-800 text-neutral-300 border border-neutral-700/50'
-                        }`}>
-                          {cs.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
-                        {cs.processLink && (
-                          <a
-                            href={cs.processLink.startsWith('http') ? cs.processLink : `https://${cs.processLink}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="p-1 px-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
-                            title="Acessar autos eletrônicos em nova aba"
+                  filteredCases.map((cs) => {
+                    const isSelected = selectedCase?.id === cs.id;
+                    return (
+                      <tr 
+                        key={cs.id} 
+                        className={`group cursor-pointer transition-all ${
+                          isSelected 
+                            ? 'bg-emerald-950/25 border-l-2 border-emerald-500' 
+                            : 'hover:bg-neutral-850/60'
+                        }`}
+                        onClick={() => setSelectedCase(cs)}
+                      >
+                        {/* Processo & Tramitação */}
+                        <td className="px-4 py-3 min-w-[260px] max-w-[320px]">
+                          <span 
+                            className="font-semibold text-neutral-100 text-xs truncate block group-hover:text-emerald-300 transition-colors leading-tight" 
+                            title={cs.title}
                           >
-                            <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Autos</span>
-                          </a>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleExportSingleCaseCsv(cs);
-                          }}
-                          className="p-1 px-2.5 bg-neutral-800 text-emerald-400 hover:bg-neutral-700 hover:text-emerald-300 rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
-                          title="Exportar Dados e Andamentos deste Processo em Planilha CSV"
-                        >
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                          <span>CSV</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleExportSingleCasePdf(cs);
-                          }}
-                          className="p-1 px-2.5 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
-                          title="Exportar Relatório deste Processo em PDF"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>PDF</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCase(cs);
-                          }}
-                          className="p-1 px-2.5 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Diligenciar</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingCase(cs);
-                          }}
-                          className="p-1 px-2.5 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white rounded-lg text-xs font-medium transition-all inline-flex items-center space-x-1 cursor-pointer"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                          <span>Editar</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteCase(cs.id);
-                          }}
-                          className="p-1 px-2.5 bg-red-950/20 hover:bg-red-900/40 text-red-400 rounded-lg text-xs font-medium transition-colors cursor-pointer inline-flex items-center space-x-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Excluir</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                            {cs.title}
+                          </span>
+                          <div className="flex items-center space-x-1.5 mt-1 text-[11px] text-neutral-400 truncate max-w-[300px]">
+                            {cs.tribunal && (
+                              <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shrink-0">
+                                {cs.tribunal}
+                              </span>
+                            )}
+                            <span className="truncate" title={cs.orgaoJulgador || cs.court || 'Não especificado'}>
+                              {cs.orgaoJulgador || cs.court || 'Não especificado'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Nº Unificado (CNJ) */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center space-x-1.5 font-mono text-[11px] text-neutral-300">
+                            <span className="select-all tracking-tight font-medium">{cs.caseNumber}</span>
+                            {cs.caseNumber && cs.caseNumber !== 'Pendente / Sem número' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(cs.caseNumber);
+                                  toast.success('Nº CNJ copiado para a área de transferência!');
+                                }}
+                                className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-emerald-400 p-0.5 rounded transition-opacity cursor-pointer"
+                                title="Copiar número do processo"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Cliente */}
+                        <td className="px-4 py-3 min-w-[150px] max-w-[190px]">
+                          <span 
+                            className="font-medium text-emerald-400 text-xs truncate block hover:underline"
+                            title={cs.clientName}
+                          >
+                            {cs.clientName}
+                          </span>
+                        </td>
+
+                        {/* Área */}
+                        <td className="px-4 py-3 whitespace-nowrap text-neutral-300 text-[11px]">
+                          <span className="truncate max-w-[130px] block" title={cs.area}>
+                            {cs.area}
+                          </span>
+                        </td>
+
+                        {/* Situação */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-full ${
+                            cs.status === 'Em andamento' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 
+                            cs.status === 'Suspenso' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 
+                            cs.status === 'Concluído' ? 'bg-neutral-800 text-neutral-300 border border-neutral-700/60' :
+                            'bg-red-500/10 text-red-400 border border-red-500/20'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              cs.status === 'Em andamento' ? 'bg-emerald-400' :
+                              cs.status === 'Suspenso' ? 'bg-amber-400' :
+                              cs.status === 'Concluído' ? 'bg-neutral-400' : 'bg-red-400'
+                            }`} />
+                            <span>{cs.status}</span>
+                          </span>
+                        </td>
+
+                        {/* Push Oficial */}
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {cs.courtPush?.enabled ? (
+                            <button
+                              type="button"
+                              onClick={(e) => handleTogglePushQuick(cs, e)}
+                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all cursor-pointer"
+                              title={`Push ativo no ${cs.courtPush.tribunal || 'Tribunal'}. Clique para alternar.`}
+                            >
+                              <BellRing className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span>{cs.courtPush.tribunal || 'Ativo'}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => handleTogglePushQuick(cs, e)}
+                              className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium text-neutral-400 hover:text-neutral-200 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 transition-all cursor-pointer"
+                              title="Clique para vincular o Push do Tribunal"
+                            >
+                              <Bell className="w-3 h-3 text-neutral-500 shrink-0" />
+                              <span>Vincular</span>
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Ações */}
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center justify-end space-x-1">
+                            {/* Botão Primário: Diligenciar */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCase(cs);
+                              }}
+                              className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-md text-[11px] font-semibold flex items-center space-x-1 transition-all cursor-pointer mr-1"
+                              title="Diligenciar / Ver Detalhes do Processo"
+                            >
+                              <Eye className="w-3 h-3 text-emerald-400" />
+                              <span>Diligenciar</span>
+                            </button>
+
+                            {/* Botões Compactos de Ação Rápida */}
+                            {cs.processLink && (
+                              <a
+                                href={cs.processLink.startsWith('http') ? cs.processLink : `https://${cs.processLink}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="p-1.5 text-neutral-400 hover:text-emerald-400 hover:bg-neutral-800 rounded-md transition-colors cursor-pointer"
+                                title="Acessar autos eletrônicos em nova aba"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportSingleCaseCsv(cs);
+                              }}
+                              className="p-1.5 text-neutral-400 hover:text-emerald-400 hover:bg-neutral-800 rounded-md transition-colors cursor-pointer"
+                              title="Exportar planilha CSV deste processo"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleExportSingleCasePdf(cs);
+                              }}
+                              className="p-1.5 text-neutral-400 hover:text-emerald-400 hover:bg-neutral-800 rounded-md transition-colors cursor-pointer"
+                              title="Exportar relatório em PDF deste processo"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingCase(cs);
+                              }}
+                              className="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded-md transition-colors cursor-pointer"
+                              title="Editar informações do processo"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCase(cs.id);
+                              }}
+                              className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-950/30 rounded-md transition-colors cursor-pointer"
+                              title="Excluir processo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
-                    <td colSpan={6} className="text-center py-12 text-slate-500 font-sans">Nenhum processo ou caso localizado com os termos solicitados.</td>
+                    <td colSpan={7} className="text-center py-12 text-neutral-500 font-sans">
+                      Nenhum processo ou caso localizado com os filtros selecionados.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -818,6 +1125,290 @@ export default function CasesPage({ cases, clients }: CasesPageProps) {
                 </div>
               </div>
             </div>
+
+            {/* Seção Push Oficial do Tribunal & Notificações */}
+            {(() => {
+              const detectedTribunal = identifyTribunalFromCNJ(selectedCase.caseNumber);
+              const isPushActive = !!selectedCase.courtPush?.enabled;
+              const currentTribunal = selectedCase.courtPush?.tribunal || selectedCase.tribunal || detectedTribunal.shortName;
+              const currentService = (selectedCase.courtPush?.serviceType || detectedTribunal.system).toUpperCase();
+
+              return (
+                <div className="bg-gradient-to-br from-neutral-900 via-neutral-950 to-neutral-900 p-4 rounded-xl border border-neutral-800 shadow-sm space-y-3.5 font-sans">
+                  {/* Header da Seção */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-emerald-400 font-semibold text-xs tracking-wide">
+                      <BellRing className="w-4 h-4 text-emerald-400" />
+                      <span>Push Oficial do Tribunal & Alertas</span>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded text-xs font-semibold ${
+                        isPushActive 
+                          ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                          : 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isPushActive ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'}`} />
+                        <span>{isPushActive ? `Push Ativo • ${currentTribunal}` : `Pendente • ${currentTribunal}`}</span>
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePushQuick(selectedCase)}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors cursor-pointer border ${
+                          isPushActive 
+                            ? 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-750' 
+                            : 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500'
+                        }`}
+                        title={isPushActive ? 'Desativar monitoramento' : 'Ativar monitoramento push'}
+                      >
+                        {isPushActive ? 'Desativar' : 'Ativar Push'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Informações resumidas do Vínculo */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-neutral-950/70 p-3 rounded-lg border border-neutral-800/80">
+                    <div>
+                      <span className="text-neutral-500 block text-[11px] mb-0.5">Tribunal Identificado:</span>
+                      <span className="text-neutral-200 font-medium">{detectedTribunal.name} ({currentTribunal})</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 block text-[11px] mb-0.5">Sistema / Plataforma:</span>
+                      <span className="text-neutral-200 font-medium">{currentService} (Oficial)</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 block text-[11px] mb-0.5">E-mail no Push:</span>
+                      <span className="text-neutral-200 font-medium truncate block" title={selectedCase.courtPush?.subscribedEmail || 'Não configurado'}>
+                        {selectedCase.courtPush?.subscribedEmail || 'Não informado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Banner de permissão do navegador */}
+                  {!hasNotificationPermission && (
+                    <div className="flex items-center justify-between p-2.5 bg-amber-950/30 border border-amber-600/30 rounded-lg text-xs">
+                      <div className="flex items-center space-x-2 text-amber-300">
+                        <Bell className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Ative as notificações do navegador para receber os alertas na tela e com som.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={requestPushPermission}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-[11px] font-semibold cursor-pointer shrink-0 ml-2"
+                      >
+                        Permitir Alertas
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Botões de Ação do Push */}
+                  <div className="pt-2 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <a
+                        href={detectedTribunal.pushUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 rounded-lg text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-all"
+                        title={`Acessar portal oficial de Push do ${detectedTribunal.shortName}`}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Acessar Push {detectedTribunal.shortName}</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingPush(!isEditingPush)}
+                        className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 hover:text-white rounded-lg text-xs font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        <span>{isEditingPush ? 'Fechar Edição' : 'Configurar Inscrição'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowPushSimulator(!showPushSimulator)}
+                        className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 hover:text-white rounded-lg text-xs font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                        title="Simular recebimento de publicação/intimação do tribunal"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Receber Andamento (Push)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const testSent = dispatchCasePushNotification(
+                            `Teste de Alerta Push • ${selectedCase.title}`,
+                            `O canal de push e alarmes do processo ${selectedCase.caseNumber} está 100% ativo!`
+                          );
+                          if (testSent) {
+                            toast.success('Notificação push de teste enviada!');
+                          } else {
+                            toast.info('Alerta sonoro executado. Permita as notificações no navegador para receber balões nativos na tela.');
+                          }
+                        }}
+                        className="p-1.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 hover:text-white rounded-lg text-xs font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                        title="Testar alerta com som"
+                      >
+                        <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Testar Alerta</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Painel de Edição de Configuração de Push */}
+                  {isEditingPush && (
+                    <div className="p-3.5 bg-neutral-950 rounded-lg border border-neutral-800 space-y-3 mt-2 text-xs">
+                      <h5 className="font-semibold text-neutral-200 flex items-center space-x-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Dados de Vínculo com o Tribunal</span>
+                      </h5>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] text-neutral-400 mb-1">Tribunal de Acompanhamento:</label>
+                          <input
+                            type="text"
+                            value={pushForm.tribunal || ''}
+                            onChange={(e) => setPushForm({ ...pushForm, tribunal: e.target.value })}
+                            placeholder="Ex: TJSP, TRF3, TJMG"
+                            className="w-full px-2.5 py-1.5 border border-neutral-800 bg-neutral-900 rounded-md text-xs text-neutral-200 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] text-neutral-400 mb-1">Sistema Processual:</label>
+                          <select
+                            value={pushForm.serviceType || 'esaj'}
+                            onChange={(e: any) => setPushForm({ ...pushForm, serviceType: e.target.value })}
+                            className="w-full px-2.5 py-1.5 border border-neutral-800 bg-neutral-900 rounded-md text-xs text-neutral-200 focus:outline-none focus:border-emerald-500"
+                          >
+                            <option value="esaj">e-SAJ (Tribunal de Justiça)</option>
+                            <option value="pje">PJe (Processo Judicial Eletrônico)</option>
+                            <option value="eproc">eproc (Justiça Federal / TJRS / TJSC)</option>
+                            <option value="projudi">Projudi (TJPR e outros)</option>
+                            <option value="cnj_datajud">DataJud / CNJ</option>
+                            <option value="outro">Outro Sistema</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] text-neutral-400 mb-1">E-mail Cadastrado no Push do Tribunal:</label>
+                          <input
+                            type="email"
+                            value={pushForm.subscribedEmail || ''}
+                            onChange={(e) => setPushForm({ ...pushForm, subscribedEmail: e.target.value })}
+                            placeholder="advogado@almeidaadvocacia.com.br"
+                            className="w-full px-2.5 py-1.5 border border-neutral-800 bg-neutral-900 rounded-md text-xs text-neutral-200 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] text-neutral-400 mb-1">Código / ID de Subscrição no Push (Opcional):</label>
+                          <input
+                            type="text"
+                            value={pushForm.pushId || ''}
+                            onChange={(e) => setPushForm({ ...pushForm, pushId: e.target.value })}
+                            placeholder="Ex: PUSH-104928"
+                            className="w-full px-2.5 py-1.5 border border-neutral-800 bg-neutral-900 rounded-md text-xs text-neutral-200 focus:outline-none focus:border-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] text-neutral-400 mb-1">Anotações do Monitoramento:</label>
+                        <textarea
+                          rows={2}
+                          value={pushForm.notes || ''}
+                          onChange={(e) => setPushForm({ ...pushForm, notes: e.target.value })}
+                          placeholder="Observações sobre o acompanhamento no tribunal..."
+                          className="w-full px-2.5 py-1.5 border border-neutral-800 bg-neutral-900 rounded-md text-xs text-neutral-200 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-neutral-800">
+                        <label className="flex items-center space-x-2 text-neutral-300 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={pushForm.enabled}
+                            onChange={(e) => setPushForm({ ...pushForm, enabled: e.target.checked, status: e.target.checked ? 'ativo' : 'desativado' })}
+                            className="rounded bg-neutral-900 border-neutral-700 text-emerald-600 focus:ring-emerald-500 accent-emerald-600 h-3.5 w-3.5 cursor-pointer"
+                          />
+                          <span className="text-[11px]">Habilitar monitoramento e notificações ativas</span>
+                        </label>
+
+                        <div className="flex space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingPush(false)}
+                            className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded text-xs font-medium cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSavePushConfig}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold cursor-pointer shadow-sm"
+                          >
+                            Salvar Configuração
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Painel Simulador de Andamentos Oficiais do Push */}
+                  {showPushSimulator && (
+                    <div className="p-3 bg-neutral-950 rounded-lg border border-neutral-800 space-y-2 mt-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-neutral-200 flex items-center space-x-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Simular Recebimento de Andamento via Push do Tribunal</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowPushSimulator(false)}
+                          className="text-neutral-500 hover:text-neutral-300 p-0.5"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-neutral-400">
+                        Clique em um dos andamentos abaixo para lançá-lo imediatamente na linha do tempo do processo e disparar o alerta push no seu dispositivo:
+                      </p>
+
+                      <div className="grid grid-cols-1 gap-1.5 pt-1">
+                        {OFFICIAL_PUSH_TEMPLATES.map((tmpl, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleApplyOfficialPushTemplate(tmpl)}
+                            className="w-full text-left p-2 rounded bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 hover:border-emerald-500/40 transition-colors flex items-start justify-between group cursor-pointer"
+                          >
+                            <div className="space-y-0.5 pr-2">
+                              <span className="font-semibold text-emerald-400 block text-xs group-hover:text-emerald-300">
+                                {tmpl.tipo}
+                              </span>
+                              <span className="text-[11px] text-neutral-300 block line-clamp-1">
+                                {tmpl.descricao}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-neutral-500 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800 shrink-0 group-hover:border-emerald-500/40">
+                              Lançar & Push
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Quick Status Control */}
             <div className="bg-neutral-950 p-4 rounded-xl border border-neutral-800 flex flex-wrap justify-between items-center gap-4 text-xs font-sans font-medium">
